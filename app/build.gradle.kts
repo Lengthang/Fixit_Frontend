@@ -49,6 +49,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.play.services.location)
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
