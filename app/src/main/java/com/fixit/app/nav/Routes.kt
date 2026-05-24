@@ -21,6 +21,16 @@ object Routes {
     const val PROV_CERTIFICATE  = "prov_certificate"
     const val PROV_PAYMENT      = "prov_payment"
     const val PROV_RECEIVED     = "prov_received"
+
+    // Provider post-onboarding dashboard.
+    const val PROVIDER_HOME = "provider/home"
+
     const val PLACEHOLDER = "placeholder/{role}"
     fun placeholder(role: UserRole) = "placeholder/${role.api}"
+
+    /** Single source of truth for "where does this role go after auth?". */
+    fun home(role: UserRole): String = when (role) {
+        UserRole.PROVIDER -> PROVIDER_HOME
+        else              -> placeholder(role)
+    }
 }

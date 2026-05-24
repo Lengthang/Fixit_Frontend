@@ -2,9 +2,12 @@ package com.fixit.app.ui.signup.provider
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,14 +48,41 @@ class ServiceAreaViewModel @Inject constructor(
         _state.value = _state.value.copy(locating = true)
         viewModelScope.launch {
             val client = LocationServices.getFusedLocationProviderClient(context)
-            val loc = suspendCancellableCoroutine<android.location.Location?> { cont ->
+
+            // 1) Try cached last-known fix first (fast, no battery cost).
+            val cached = suspendCancellableCoroutine<android.location.Location?> { cont ->
                 client.lastLocation
-                    .addOnSuccessListener { cont.resume(it) }
-                    .addOnFailureListener { cont.resume(null) }
+                    .addOnSuccessListener {
+                        Log.d("ServiceArea", "lastLocation returned: $it")
+                        cont.resume(it)
+                    }
+                    .addOnFailureListener {
+                        Log.w("ServiceArea", "lastLocation failed", it)
+                        cont.resume(null)
+                    }
             }
+
+            val resolved = cached ?: run {
+                // 2) No cached fix — actively request one. This takes a few seconds.
+                Log.d("ServiceArea", "Requesting fresh location…")
+                suspendCancellableCoroutine<android.location.Location?> { cont ->
+                    val cts = CancellationTokenSource()
+                    client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
+                        .addOnSuccessListener {
+                            Log.d("ServiceArea", "getCurrentLocation returned: $it")
+                            cont.resume(it)
+                        }
+                        .addOnFailureListener {
+                            Log.w("ServiceArea", "getCurrentLocation failed", it)
+                            cont.resume(null)
+                        }
+                    cont.invokeOnCancellation { cts.cancel() }
+                }
+            }
+
             _state.value = _state.value.copy(
-                latitude = loc?.latitude,
-                longitude = loc?.longitude,
+                latitude = resolved?.latitude,
+                longitude = resolved?.longitude,
                 locating = false,
             )
         }

@@ -16,6 +16,7 @@ import com.fixit.app.domain.model.UserRole
 import com.fixit.app.ui.auth.OtpScreen
 import com.fixit.app.ui.auth.PhoneEntryScreen
 import com.fixit.app.ui.placeholder.UserPlaceholderScreen
+import com.fixit.app.ui.provider.dashboard.ProviderHomeScreen
 import com.fixit.app.ui.signup.AboutYouScreen
 import com.fixit.app.ui.signup.LocationScreen
 import com.fixit.app.ui.signup.PromoScreen
@@ -29,6 +30,24 @@ import com.fixit.app.ui.signup.provider.ServiceAreaScreen
 import com.fixit.app.ui.signup.provider.ServicesScreen
 import com.fixit.app.ui.welcome.WelcomeScreen
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
+
+private const val DEV_TAG = "DevAuth"
+
+/**
+ * Turns a thrown exception into something useful for the logcat line.
+ * Crucially, for Retrofit 4xx/5xx we pull the server's error body so you
+ * don't have to flip to a separate terminal to see "what did FastAPI say".
+ */
+private fun describe(e: Throwable): String {
+    return when (e) {
+        is HttpException -> {
+            val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
+            "HTTP ${e.code()} — ${body ?: e.message()}"
+        }
+        else -> e.message ?: e.javaClass.simpleName
+    }
+}
 
 @Composable
 fun FixItNavGraph(startDestination: String) {
@@ -44,17 +63,31 @@ fun FixItNavGraph(startDestination: String) {
                 onSignIn = { nav.navigate(Routes.PHONE) },
                 onDevNewUser = {
                     scope.launch {
-                        devAuth.signIn(DevConfig.freshPhone(), role = UserRole.CUSTOMER)
-                        nav.navigate(Routes.SIGNUP_GRAPH) {
-                            popUpTo(Routes.WELCOME) { inclusive = true }
+                        val result = runCatching {
+                            devAuth.signIn(DevConfig.freshPhone(), role = UserRole.CUSTOMER)
+                        }
+                        result.onSuccess {
+                            nav.navigate(Routes.SIGNUP_GRAPH) {
+                                popUpTo(Routes.WELCOME) { inclusive = true }
+                            }
+                        }.onFailure { e ->
+                            // Stay on the welcome screen so the user can retry.
+                            // The logcat line tells you exactly what the backend said.
+                            android.util.Log.e(DEV_TAG, "dev new-user sign-in failed: ${describe(e)}", e)
                         }
                     }
                 },
                 onDevExistingUser = { tu ->
                     scope.launch {
-                        devAuth.signIn(tu.phone, role = tu.role)
-                        nav.navigate(Routes.placeholder(tu.role)) {
-                            popUpTo(Routes.WELCOME) { inclusive = true }
+                        val result = runCatching {
+                            devAuth.signIn(tu.phone, role = tu.role)
+                        }
+                        result.onSuccess {
+                            nav.navigate(Routes.home(tu.role)) {
+                                popUpTo(Routes.WELCOME) { inclusive = true }
+                            }
+                        }.onFailure { e ->
+                            android.util.Log.e(DEV_TAG, "dev sign-in (${tu.label}) failed: ${describe(e)}", e)
                         }
                     }
                 },
@@ -91,7 +124,7 @@ fun FixItNavGraph(startDestination: String) {
                 },
                 onVerifiedExisting = { isProvider ->
                     val role = if (isProvider) UserRole.PROVIDER else UserRole.CUSTOMER
-                    nav.navigate(Routes.placeholder(role)) {
+                    nav.navigate(Routes.home(role)) {
                         popUpTo(Routes.WELCOME) { inclusive = true }
                     }
                 },
@@ -143,7 +176,7 @@ fun FixItNavGraph(startDestination: String) {
                 PromoScreen(
                     onBack = { nav.popBackStack() },
                     onFinish = {
-                        nav.navigate(Routes.placeholder(UserRole.CUSTOMER)) {
+                        nav.navigate(Routes.home(UserRole.CUSTOMER)) {
                             popUpTo(Routes.WELCOME) { inclusive = true }
                         }
                     },
@@ -206,13 +239,26 @@ fun FixItNavGraph(startDestination: String) {
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
                 ReceivedScreen(
                     onDashboard = {
-                        nav.navigate(Routes.placeholder(UserRole.PROVIDER)) {
+                        nav.navigate(Routes.home(UserRole.PROVIDER)) {
                             popUpTo(Routes.WELCOME) { inclusive = true }
                         }
                     },
                     draftVm = draftVm,
                 )
             }
+        }
+
+        // ── Provider dashboard ──
+        composable(Routes.PROVIDER_HOME) {
+            ProviderHomeScreen(
+                onTabClick = { /* TODO: wire jobs/calendar/messages/profile when their screens exist */ },
+                onNewRequestClick = { /* TODO: navigate to job detail */ },
+                onUpcomingClick = { /* TODO: navigate to job detail */ },
+                onWithdrawClick = { /* TODO: navigate to withdraw flow */ },
+                onNotificationsClick = { /* TODO: navigate to notifications */ },
+                onSeeAllRequests = { /* TODO: navigate to all-requests list */ },
+                onSeeAllUpcoming = { /* TODO: navigate to schedule */ },
+            )
         }
 
         composable(

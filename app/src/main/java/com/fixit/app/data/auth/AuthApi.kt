@@ -11,5 +11,6 @@ interface AuthApi {
     @POST("auth/verify-otp")
     suspend fun verifyOtp(@Body body: VerifyOtpRequest): TokenResponse
 
+    @POST("auth/dev-token")
     suspend fun devToken(@Query("phone") phone: String): TokenResponse
 }

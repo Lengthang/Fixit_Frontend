@@ -20,4 +20,5 @@ data class UserResponse(
     val phone: String,
     val role: String,
     @Json(name = "is_active") val isActive: Boolean,
+    @Json(name = "profile_photo_url") val profilePhotoUrl: String? = null,
 )

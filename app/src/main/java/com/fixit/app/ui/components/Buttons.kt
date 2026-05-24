@@ -4,7 +4,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,12 +39,16 @@ fun PrimaryButton(text: String, enabled: Boolean = true, onClick: () -> Unit = {
 fun OutlineButton(text: String, onClick: () -> Unit = {}) {
     Box(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp)) {
         Box(
-            Modifier.fillMaxWidth().height(52.dp)
+            Modifier
+                .fillMaxWidth()
+                .height(52.dp)
                 .clip(RoundedCornerShape(26.dp))
                 .background(Color.White)
                 .border(BorderStroke(1.5.dp, C.Line), RoundedCornerShape(26.dp))
                 .clickable { onClick() },
-            contentAlignment = Alignment.Center,
-        ) { Text(text, color = C.Slate, fontSize = 15.sp, fontWeight = FontWeight.Medium) }
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text, color = C.Slate, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        }
     }
 }

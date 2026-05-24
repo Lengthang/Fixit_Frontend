@@ -29,6 +29,7 @@ data class ProviderResponse(
     val id: String,
     @Json(name = "user_id") val userId: String,
     val bio: String? = null,
+    @Json(name = "profile_photo_url") val profilePhotoUrl: String? = null,
     @Json(name = "years_experience") val yearsExperience: Int = 0,
     val location: String? = null,
     val latitude: Double? = null,

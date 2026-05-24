@@ -1,8 +1,12 @@
 package com.fixit.app.di
 
 import com.fixit.app.data.auth.AuthApi
+import com.fixit.app.data.booking.BookingApi
+import com.fixit.app.data.category.CategoryApi
 import com.fixit.app.data.customer.CustomerApi
 import com.fixit.app.data.network.AuthInterceptor
+import com.fixit.app.data.provider.ProviderApi
+import com.fixit.app.data.wallet.WalletApi
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
@@ -45,10 +49,8 @@ object NetworkModule {
 
     @Provides @Singleton fun authApi(r: Retrofit): AuthApi = r.create(AuthApi::class.java)
     @Provides @Singleton fun customerApi(r: Retrofit): CustomerApi = r.create(CustomerApi::class.java)
-
-    @Provides @Singleton fun providerApi(r: Retrofit): com.fixit.app.data.provider.ProviderApi =
-        r.create(com.fixit.app.data.provider.ProviderApi::class.java)
-
-    @Provides @Singleton fun categoryApi(r: Retrofit): com.fixit.app.data.category.CategoryApi =
-        r.create(com.fixit.app.data.category.CategoryApi::class.java)
+    @Provides @Singleton fun providerApi(r: Retrofit): ProviderApi = r.create(ProviderApi::class.java)
+    @Provides @Singleton fun categoryApi(r: Retrofit): CategoryApi = r.create(CategoryApi::class.java)
+    @Provides @Singleton fun walletApi(r: Retrofit): WalletApi = r.create(WalletApi::class.java)
+    @Provides @Singleton fun bookingApi(r: Retrofit): BookingApi = r.create(BookingApi::class.java)
 }

@@ -3,7 +3,6 @@ package com.fixit.app.ui.welcome
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fixit.app.data.local.TokenStorage
-import com.fixit.app.domain.model.UserRole
 import com.fixit.app.nav.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +25,7 @@ class RootViewModel @Inject constructor(
             _startDestination.value = if (token.isNullOrBlank()) {
                 Routes.WELCOME
             } else {
-                Routes.placeholder(tokenStorage.roleBlocking())
+                Routes.home(tokenStorage.roleBlocking())
             }
         }
     }
