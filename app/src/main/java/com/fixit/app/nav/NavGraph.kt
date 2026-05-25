@@ -29,6 +29,9 @@ import com.fixit.app.ui.provider.messages.ProviderMessagesScreen
 import com.fixit.app.ui.provider.profile.ProviderProfileScreen
 import com.fixit.app.ui.provider.profile.ProviderProfileViewModel
 import com.fixit.app.ui.provider.reviews.ProviderReviewsScreen
+import com.fixit.app.ui.provider.services.AddEditServiceScreen
+import com.fixit.app.ui.provider.services.MyServicesScreen
+import com.fixit.app.ui.provider.services.ServiceDetailScreen
 import com.fixit.app.ui.signup.AboutYouScreen
 import com.fixit.app.ui.signup.LocationScreen
 import com.fixit.app.ui.signup.PromoScreen
@@ -290,14 +293,11 @@ fun FixItNavGraph(startDestination: String) {
         composable(Routes.PROVIDER_MESSAGES) {
             ProviderMessagesScreen(
                 onTabClick = { nav.switchProviderTab(it) },
-                // Chat detail isn't wired yet — see TODO.
                 onMessageClick = { },
             )
         }
 
         composable(Routes.PROVIDER_PROFILE) {
-            // Take the VM here too so we can observe the signed-out flag
-            // without forcing the screen to know about it.
             val vm: ProviderProfileViewModel = hiltViewModel()
             val signedOut by vm.signedOut.collectAsState()
             LaunchedEffect(signedOut) {
@@ -310,7 +310,7 @@ fun FixItNavGraph(startDestination: String) {
             ProviderProfileScreen(
                 onTabClick = { nav.switchProviderTab(it) },
                 onEditProfile = { /* TODO: edit profile screen */ },
-                onServicesAndRates = { /* TODO: services & rates screen */ },
+                onServicesAndRates = { nav.navigate(Routes.PROVIDER_SERVICES) },
                 onPaymentAndPayouts = { nav.navigate(Routes.PROVIDER_EARNINGS) },
                 onReviews = { nav.navigate(Routes.PROVIDER_REVIEWS) },
                 onHelp = { /* TODO: help & support */ },
@@ -324,9 +324,6 @@ fun FixItNavGraph(startDestination: String) {
             ProviderEarningsScreen(
                 onBack = { nav.popBackStack() },
                 onTabClick = { nav.switchProviderTab(it) },
-                // No withdraw endpoint flow yet — see TODO in screen. For now
-                // we surface a no-op; once /payments/withdrawals gets a
-                // confirmation UI, this routes there.
                 onWithdraw = { /* TODO: withdrawal flow */ },
             )
         }
@@ -335,6 +332,57 @@ fun FixItNavGraph(startDestination: String) {
             ProviderReviewsScreen(
                 onBack = { nav.popBackStack() },
                 onTabClick = { nav.switchProviderTab(it) },
+            )
+        }
+
+        // ── Provider services sub-screens ──
+
+        composable(Routes.PROVIDER_SERVICES) {
+            MyServicesScreen(
+                onBack = { nav.popBackStack() },
+                onServiceClick = { id -> nav.navigate(Routes.providerServiceDetail(id)) },
+                onNewService = { nav.navigate(Routes.PROVIDER_SERVICE_NEW) },
+                onTabClick = { nav.switchProviderTab(it) },
+            )
+        }
+
+        composable(Routes.PROVIDER_SERVICE_NEW) {
+            AddEditServiceScreen(
+                onBack = { nav.popBackStack() },
+                onSaved = {
+                    // Pop back to the services list, refreshing it.
+                    nav.popBackStack(Routes.PROVIDER_SERVICES, inclusive = false)
+                },
+            )
+        }
+
+        composable(
+            Routes.PROVIDER_SERVICE_DETAIL,
+            arguments = listOf(navArgument("serviceId") {
+                type = NavType.StringType
+                nullable = false
+            }),
+        ) {
+            ServiceDetailScreen(
+                onBack = { nav.popBackStack() },
+                onEdit = { id -> nav.navigate(Routes.providerServiceEdit(id)) },
+            )
+        }
+
+        composable(
+            Routes.PROVIDER_SERVICE_EDIT,
+            arguments = listOf(navArgument("serviceId") {
+                type = NavType.StringType
+                nullable = false
+            }),
+        ) {
+            AddEditServiceScreen(
+                onBack = { nav.popBackStack() },
+                onSaved = {
+                    // Pop both the edit screen AND the stale detail screen,
+                    // landing back on the services list.
+                    nav.popBackStack(Routes.PROVIDER_SERVICES, inclusive = false)
+                },
             )
         }
 

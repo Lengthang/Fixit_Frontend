@@ -32,6 +32,19 @@ object Routes {
     const val PROVIDER_EARNINGS  = "provider/earnings"
     const val PROVIDER_REVIEWS   = "provider/reviews"
 
+    // ── Provider services sub-screens ──
+    /** List of the signed-in provider's own services. */
+    const val PROVIDER_SERVICES = "provider/services"
+    /** Add a brand-new service. */
+    const val PROVIDER_SERVICE_NEW = "provider/service_new"
+    /** Service detail — serviceId is a required nav arg. */
+    const val PROVIDER_SERVICE_DETAIL = "provider/service/{serviceId}"
+    /** Edit an existing service — serviceId is a required nav arg. */
+    const val PROVIDER_SERVICE_EDIT = "provider/service/{serviceId}/edit"
+
+    fun providerServiceDetail(id: String) = "provider/service/$id"
+    fun providerServiceEdit(id: String)   = "provider/service/$id/edit"
+
     const val JOB_DETAIL = "provider/jobs/{bookingId}"
     fun jobDetail(bookingId: String) = "provider/jobs/$bookingId"
 
