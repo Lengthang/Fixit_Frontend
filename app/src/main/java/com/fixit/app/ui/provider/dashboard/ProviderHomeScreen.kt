@@ -11,14 +11,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
@@ -34,12 +37,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.fixit.app.domain.model.DashboardStats
 import com.fixit.app.domain.model.JobRequest
+import com.fixit.app.domain.model.ProviderStatus
 import com.fixit.app.domain.model.UpcomingJob
 import com.fixit.app.ui.components.Avatar
 import com.fixit.app.ui.components.DashboardHeader
@@ -69,6 +78,13 @@ fun ProviderHomeScreen(
         state.errorMessage?.let { snackbarHostState.showSnackbar(it) }
     }
 
+    // Show the pending-approval surface only once we KNOW the provider isn't
+    // approved. A null status means the profile call hasn't returned yet —
+    // keeping the regular layout in that window avoids a flash of the
+    // pending UI before real data lands.
+    val showPending = state.providerStatus != null &&
+            state.providerStatus != ProviderStatus.APPROVED
+
     FixItScreen {
         // ── Scrollable body ──
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -86,61 +102,69 @@ fun ProviderHomeScreen(
                     onNotificationsClick = onNotificationsClick
                 )
 
-                BalanceHero(
-                    balance = state.balance,
-                    onWithdrawClick = onWithdrawClick
-                )
 
-                StatsRow(state.stats)
 
-                SectionHeader(
-                    title = "New requests",
-                    badge = state.newRequests.size
-                        .takeIf { it > 0 }
-                        ?.toString(),
-                    actionText = "See all".takeIf { state.newRequests.isNotEmpty() },
-                    onActionClick = onSeeAllRequests
-                )
-                if (state.newRequests.isEmpty()) {
-                    Box(Modifier.padding(horizontal = 20.dp)) {
-                        EmptyState(
-                            title = "No new requests yet",
-                            subtitle = "When customers book your services, they'll show up here."
-                        )
-                    }
+                if (showPending) {
+                    // Replaces the "New requests" + "Upcoming today" pair while
+                    // the provider is awaiting approval (or has been rejected).
+                    PendingApprovalSection()
                 } else {
-                    Column(
-                        Modifier.padding(horizontal = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        state.newRequests.forEach { req ->
-                            RequestRow(req, onClick = { onNewRequestClick(req) })
+                    BalanceHero(
+                        balance = state.balance,
+                        onWithdrawClick = onWithdrawClick
+                    )
+
+                    StatsRow(state.stats)
+
+                    SectionHeader(
+                        title = "New requests",
+                        badge = state.newRequests.size
+                            .takeIf { it > 0 }
+                            ?.toString(),
+                        actionText = "See all".takeIf { state.newRequests.isNotEmpty() },
+                        onActionClick = onSeeAllRequests
+                    )
+                    if (state.newRequests.isEmpty()) {
+                        Box(Modifier.padding(horizontal = 20.dp)) {
+                            EmptyState(
+                                title = "No new requests yet",
+                                subtitle = "When customers book your services, they'll show up here."
+                            )
+                        }
+                    } else {
+                        Column(
+                            Modifier.padding(horizontal = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            state.newRequests.forEach { req ->
+                                RequestRow(req, onClick = { onNewRequestClick(req) })
+                            }
                         }
                     }
-                }
 
-                Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                SectionHeader(
-                    title = "Upcoming today",
-                    actionText = "View all".takeIf { state.upcoming.isNotEmpty() },
-                    onActionClick = onSeeAllUpcoming
-                )
-                if (state.upcoming.isEmpty()) {
-                    Box(Modifier.padding(horizontal = 20.dp)) {
-                        EmptyState(
-                            title = "Nothing on the schedule",
-                            subtitle = "Your day is clear. Confirmed bookings will appear here."
-                        )
-                    }
-                } else {
-                    Column(Modifier.padding(horizontal = 20.dp)) {
-                        state.upcoming.forEachIndexed { i, u ->
-                            UpcomingRow(
-                                u,
-                                last = i == state.upcoming.lastIndex,
-                                onClick = { onUpcomingClick(u) }
+                    SectionHeader(
+                        title = "Upcoming today",
+                        actionText = "View all".takeIf { state.upcoming.isNotEmpty() },
+                        onActionClick = onSeeAllUpcoming
+                    )
+                    if (state.upcoming.isEmpty()) {
+                        Box(Modifier.padding(horizontal = 20.dp)) {
+                            EmptyState(
+                                title = "Nothing on the schedule",
+                                subtitle = "Your day is clear. Confirmed bookings will appear here."
                             )
+                        }
+                    } else {
+                        Column(Modifier.padding(horizontal = 20.dp)) {
+                            state.upcoming.forEachIndexed { i, u ->
+                                UpcomingRow(
+                                    u,
+                                    last = i == state.upcoming.lastIndex,
+                                    onClick = { onUpcomingClick(u) }
+                                )
+                            }
                         }
                     }
                 }
@@ -394,6 +418,124 @@ private fun UpcomingRow(u: UpcomingJob, last: Boolean, onClick: () -> Unit) {
     }
     if (!last) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line))
+    }
+}
+
+// ── Pending approval ─────────────────────────────────────────────────────
+// Mirrors ReceivedScreen exactly (check icon with star badge, headline,
+// subtitle, "WHAT'S NEXT" card with three steps), minus the FixItScreen
+// shell and the "Go to dashboard" PrimaryButton, neither of which belong
+// inside the dashboard scroll area.
+
+@Composable
+private fun PendingApprovalSection() {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(top = 24.dp, bottom = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box {
+            Box(
+                Modifier.size(120.dp).clip(CircleShape).background(Color.White),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier.size(88.dp).clip(CircleShape).background(C.Blue),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.Check,
+                        null,
+                        tint = Color.White,
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
+            }
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-4).dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(C.Orange)
+                    .border(3.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("★", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(
+            "Application received",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = (-0.4).sp,
+            textAlign = TextAlign.Center,
+            lineHeight = 30.sp,
+            color = C.Ink,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Your application has been received. You'll get a confirmation message from our staff.",
+            fontSize = 14.sp,
+            color = C.Slate,
+            textAlign = TextAlign.Center,
+            lineHeight = 20.sp,
+        )
+        Spacer(Modifier.height(20.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.White)
+                .border(1.dp, C.Line, RoundedCornerShape(16.dp))
+                .padding(16.dp),
+        ) {
+            Text(
+                "WHAT'S NEXT",
+                fontSize = 11.sp,
+                color = C.Slate,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.6.sp
+            )
+            Spacer(Modifier.height(12.dp))
+            PendingStep("1", C.BlueSoft, C.Blue, buildAnnotatedString {
+                append("We review your details within ")
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("24–48 hours") }
+                append(".")
+            })
+            Spacer(Modifier.height(12.dp))
+            PendingStep("2", C.BlueSoft, C.Blue, buildAnnotatedString {
+                append("You'll receive a confirmation SMS & email.")
+            })
+            Spacer(Modifier.height(12.dp))
+            PendingStep("3", C.OrangeSoft, C.Orange, buildAnnotatedString {
+                append("Start receiving job requests.")
+            })
+        }
+    }
+}
+
+@Composable
+private fun PendingStep(
+    number: String,
+    bg: Color,
+    fg: Color,
+    text: AnnotatedString,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            Modifier.size(28.dp).clip(CircleShape).background(bg),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(number, color = fg, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
+        Text(text, fontSize = 13.sp, color = C.Ink, lineHeight = 19.sp)
     }
 }
 

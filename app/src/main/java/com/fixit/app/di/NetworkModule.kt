@@ -5,7 +5,9 @@ import com.fixit.app.data.booking.BookingApi
 import com.fixit.app.data.category.CategoryApi
 import com.fixit.app.data.customer.CustomerApi
 import com.fixit.app.data.network.AuthInterceptor
+import com.fixit.app.data.payment.PaymentApi
 import com.fixit.app.data.provider.ProviderApi
+import com.fixit.app.data.review.ReviewApi
 import com.fixit.app.data.wallet.WalletApi
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -23,8 +25,6 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    // Point to your dev backend. Use 10.0.2.2 if running on the Android emulator
-    // against a server on the host machine. Move to BuildConfig per variant later.
     private const val BASE_URL = "http://10.0.2.2:8000/"
 
     @Provides @Singleton
@@ -53,4 +53,6 @@ object NetworkModule {
     @Provides @Singleton fun categoryApi(r: Retrofit): CategoryApi = r.create(CategoryApi::class.java)
     @Provides @Singleton fun walletApi(r: Retrofit): WalletApi = r.create(WalletApi::class.java)
     @Provides @Singleton fun bookingApi(r: Retrofit): BookingApi = r.create(BookingApi::class.java)
+    @Provides @Singleton fun paymentApi(r: Retrofit): PaymentApi = r.create(PaymentApi::class.java)
+    @Provides @Singleton fun reviewApi(r: Retrofit): ReviewApi = r.create(ReviewApi::class.java)
 }

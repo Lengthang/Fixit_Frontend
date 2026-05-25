@@ -9,6 +9,7 @@ import com.fixit.app.data.provider.ProviderRepository
 import com.fixit.app.data.wallet.WalletRepository
 import com.fixit.app.domain.model.DashboardStats
 import com.fixit.app.domain.model.JobRequest
+import com.fixit.app.domain.model.ProviderStatus
 import com.fixit.app.domain.model.UpcomingJob
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -16,7 +17,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -39,6 +39,12 @@ data class ProviderHomeState(
     val stats: DashboardStats = DashboardStats(),
     val newRequests: List<JobRequest> = emptyList(),
     val upcoming: List<UpcomingJob> = emptyList(),
+    /**
+     * Provider approval status. Null while the provider profile is still
+     * loading — the screen treats null as "don't know yet, render the normal
+     * layout" so there's no flash of the pending UI before data lands.
+     */
+    val providerStatus: ProviderStatus? = null,
 )
 
 @HiltViewModel
@@ -54,7 +60,6 @@ class ProviderHomeViewModel @Inject constructor(
 
     init { refresh() }
 
-    /** Re-pulls every dashboard source in parallel. Safe to call repeatedly. */
     fun refresh() {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, errorMessage = null)
@@ -78,8 +83,6 @@ class ProviderHomeViewModel @Inject constructor(
     // ── loading ──
 
     private suspend fun loadAll() = coroutineScope {
-        // Fetch in parallel and tolerate individual failures so a single
-        // bad endpoint doesn't blank out the whole dashboard.
         val meDeferred       = async { runCatching { customerRepo.me() } }
         val providerDeferred = async { runCatching { providerRepo.me() } }
         val walletDeferred   = async { runCatching { walletRepo.me() } }
@@ -96,23 +99,25 @@ class ProviderHomeViewModel @Inject constructor(
         val avatarUrl = provider?.profilePhotoUrl ?: me?.profilePhotoUrl
 
         _state.value = _state.value.copy(
-            greeting     = timeOfDayGreeting(nowLocal.hour),
-            displayName  = firstName(me?.name).ifBlank { me?.name.orEmpty() },
-            initials     = initialsOf(me?.name),
-            avatarUrl    = avatarUrl,
-            balance      = wallet?.balance?.let { BigDecimal.valueOf(it) } ?: BigDecimal.ZERO,
-            stats        = computeStats(
-                bookings  = bookings,
-                avgRating = provider?.avgRating ?: 0.0,
-                now       = now,
-                tz        = tz,
+            greeting       = timeOfDayGreeting(nowLocal.hour),
+            displayName    = firstName(me?.name).ifBlank { me?.name.orEmpty() },
+            initials       = initialsOf(me?.name),
+            avatarUrl      = avatarUrl,
+            balance        = wallet?.balance?.let { BigDecimal.valueOf(it) } ?: BigDecimal.ZERO,
+            // Drives the pending-approval branch in ProviderHomeScreen.
+            providerStatus = ProviderStatus.fromApi(provider?.status),
+            stats          = computeStats(
+                bookings   = bookings,
+                avgRating  = provider?.avgRating ?: 0.0,
+                now        = now,
+                tz         = tz,
             ),
-            newRequests  = bookings
+            newRequests    = bookings
                 .filter { it.status == STATUS_PENDING }
                 .sortedByDescending { safeInstant(it.createdAt) }
                 .take(MAX_PREVIEW_ROWS)
                 .map { it.toJobRequest(now) },
-            upcoming     = bookings
+            upcoming       = bookings
                 .filter {
                     it.status == STATUS_IN_PROGRESS &&
                             isOnSameDay(safeInstant(it.scheduledAt), now, tz)
@@ -144,11 +149,11 @@ class ProviderHomeViewModel @Inject constructor(
 
         return DashboardStats(
             weekEarnings      = weekEarnings,
-            weekDeltaPercent  = 0,           // TODO: compute once last-week earnings are tracked
+            weekDeltaPercent  = 0,
             jobsDoneTotal     = completed.size,
             jobsDoneThisWeek  = thisWeek.size,
             ratingAverage     = avgRating,
-            ratingReviewCount = 0,           // TODO: wire when a reviews endpoint exists
+            ratingReviewCount = 0,
         )
     }
 
@@ -212,7 +217,7 @@ class ProviderHomeViewModel @Inject constructor(
 
     private fun startOfWeek(now: Instant, tz: TimeZone): Instant {
         val today: LocalDate = now.toLocalDateTime(tz).date
-        val daysSinceMonday  = today.dayOfWeek.ordinal.toLong()   // MONDAY=0 … SUNDAY=6
+        val daysSinceMonday  = today.dayOfWeek.ordinal.toLong()
         val monday = today.minus(daysSinceMonday, DateTimeUnit.DAY)
         return monday.atStartOfDayIn(tz)
     }
@@ -256,13 +261,13 @@ class ProviderHomeViewModel @Inject constructor(
         private const val MAX_PREVIEW_ROWS   = 5
 
         private val AVATAR_PALETTE = longArrayOf(
-            0xFF2563EB, // blue
-            0xFFF97316, // orange
-            0xFF10B981, // emerald
-            0xFF8B5CF6, // violet
-            0xFFEC4899, // pink
-            0xFF06B6D4, // cyan
-            0xFFEAB308, // amber
+            0xFF2563EB,
+            0xFFF97316,
+            0xFF10B981,
+            0xFF8B5CF6,
+            0xFFEC4899,
+            0xFF06B6D4,
+            0xFFEAB308,
         )
     }
 }

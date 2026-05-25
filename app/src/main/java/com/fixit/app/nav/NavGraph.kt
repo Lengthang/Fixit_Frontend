@@ -1,9 +1,13 @@
 package com.fixit.app.nav
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -16,7 +20,15 @@ import com.fixit.app.domain.model.UserRole
 import com.fixit.app.ui.auth.OtpScreen
 import com.fixit.app.ui.auth.PhoneEntryScreen
 import com.fixit.app.ui.placeholder.UserPlaceholderScreen
+import com.fixit.app.ui.provider.calendar.ProviderCalendarScreen
 import com.fixit.app.ui.provider.dashboard.ProviderHomeScreen
+import com.fixit.app.ui.provider.earnings.ProviderEarningsScreen
+import com.fixit.app.ui.provider.jobs.JobDetailScreen
+import com.fixit.app.ui.provider.jobs.ProviderJobsScreen
+import com.fixit.app.ui.provider.messages.ProviderMessagesScreen
+import com.fixit.app.ui.provider.profile.ProviderProfileScreen
+import com.fixit.app.ui.provider.profile.ProviderProfileViewModel
+import com.fixit.app.ui.provider.reviews.ProviderReviewsScreen
 import com.fixit.app.ui.signup.AboutYouScreen
 import com.fixit.app.ui.signup.LocationScreen
 import com.fixit.app.ui.signup.PromoScreen
@@ -34,18 +46,23 @@ import retrofit2.HttpException
 
 private const val DEV_TAG = "DevAuth"
 
+private fun describe(e: Throwable): String = when (e) {
+    is HttpException -> {
+        val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
+        "HTTP ${e.code()} — ${body ?: e.message()}"
+    }
+    else -> e.message ?: e.javaClass.simpleName
+}
+
 /**
- * Turns a thrown exception into something useful for the logcat line.
- * Crucially, for Retrofit 4xx/5xx we pull the server's error body so you
- * don't have to flip to a separate terminal to see "what did FastAPI say".
+ * Navigates between provider tabs without stacking entries. Tapping the same
+ * tab twice doesn't push a duplicate; back from any tab pops to PROVIDER_HOME.
  */
-private fun describe(e: Throwable): String {
-    return when (e) {
-        is HttpException -> {
-            val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
-            "HTTP ${e.code()} — ${body ?: e.message()}"
-        }
-        else -> e.message ?: e.javaClass.simpleName
+private fun NavHostController.switchProviderTab(tabId: String) {
+    navigate(Routes.providerTab(tabId)) {
+        launchSingleTop = true
+        popUpTo(Routes.PROVIDER_HOME) { inclusive = false; saveState = true }
+        restoreState = true
     }
 }
 
@@ -63,26 +80,22 @@ fun FixItNavGraph(startDestination: String) {
                 onSignIn = { nav.navigate(Routes.PHONE) },
                 onDevNewUser = {
                     scope.launch {
-                        val result = runCatching {
+                        runCatching {
                             devAuth.signIn(DevConfig.freshPhone(), role = UserRole.CUSTOMER)
-                        }
-                        result.onSuccess {
+                        }.onSuccess {
                             nav.navigate(Routes.SIGNUP_GRAPH) {
                                 popUpTo(Routes.WELCOME) { inclusive = true }
                             }
                         }.onFailure { e ->
-                            // Stay on the welcome screen so the user can retry.
-                            // The logcat line tells you exactly what the backend said.
                             android.util.Log.e(DEV_TAG, "dev new-user sign-in failed: ${describe(e)}", e)
                         }
                     }
                 },
                 onDevExistingUser = { tu ->
                     scope.launch {
-                        val result = runCatching {
+                        runCatching {
                             devAuth.signIn(tu.phone, role = tu.role)
-                        }
-                        result.onSuccess {
+                        }.onSuccess {
                             nav.navigate(Routes.home(tu.role)) {
                                 popUpTo(Routes.WELCOME) { inclusive = true }
                             }
@@ -132,7 +145,7 @@ fun FixItNavGraph(startDestination: String) {
             )
         }
 
-        // ── Signup sub-graph (customer + provider branches share the draft VM) ──
+        // ── Signup sub-graph ──
         navigation(startDestination = Routes.ABOUT_YOU, route = Routes.SIGNUP_GRAPH) {
 
             composable(Routes.ABOUT_YOU) { entry ->
@@ -171,7 +184,6 @@ fun FixItNavGraph(startDestination: String) {
                 )
             }
 
-            // ── Customer terminal step ──
             composable(Routes.PROMO) {
                 PromoScreen(
                     onBack = { nav.popBackStack() },
@@ -183,7 +195,6 @@ fun FixItNavGraph(startDestination: String) {
                 )
             }
 
-            // ── Provider branch ──
             composable(Routes.PROV_SERVICE_AREA) { entry ->
                 val parent = remember(entry) { nav.getBackStackEntry(Routes.SIGNUP_GRAPH) }
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
@@ -248,16 +259,95 @@ fun FixItNavGraph(startDestination: String) {
             }
         }
 
-        // ── Provider dashboard ──
+        // ── Provider tabs ──
+
         composable(Routes.PROVIDER_HOME) {
             ProviderHomeScreen(
-                onTabClick = { /* TODO: wire jobs/calendar/messages/profile when their screens exist */ },
-                onNewRequestClick = { /* TODO: navigate to job detail */ },
-                onUpcomingClick = { /* TODO: navigate to job detail */ },
-                onWithdrawClick = { /* TODO: navigate to withdraw flow */ },
-                onNotificationsClick = { /* TODO: navigate to notifications */ },
-                onSeeAllRequests = { /* TODO: navigate to all-requests list */ },
-                onSeeAllUpcoming = { /* TODO: navigate to schedule */ },
+                onTabClick = { nav.switchProviderTab(it) },
+                onNewRequestClick = { req -> nav.navigate(Routes.jobDetail(req.id)) },
+                onUpcomingClick = { up -> nav.navigate(Routes.jobDetail(up.id)) },
+                onWithdrawClick = { nav.navigate(Routes.PROVIDER_EARNINGS) },
+                onNotificationsClick = { /* TODO: notifications screen */ },
+                onSeeAllRequests = { nav.switchProviderTab("jobs") },
+                onSeeAllUpcoming = { nav.switchProviderTab("calendar") },
+            )
+        }
+
+        composable(Routes.PROVIDER_JOBS) {
+            ProviderJobsScreen(
+                onTabClick = { nav.switchProviderTab(it) },
+                onJobClick = { bookingId -> nav.navigate(Routes.jobDetail(bookingId)) },
+            )
+        }
+
+        composable(Routes.PROVIDER_CALENDAR) {
+            ProviderCalendarScreen(
+                onTabClick = { nav.switchProviderTab(it) },
+                onJobClick = { bookingId -> nav.navigate(Routes.jobDetail(bookingId)) },
+            )
+        }
+
+        composable(Routes.PROVIDER_MESSAGES) {
+            ProviderMessagesScreen(
+                onTabClick = { nav.switchProviderTab(it) },
+                // Chat detail isn't wired yet — see TODO.
+                onMessageClick = { },
+            )
+        }
+
+        composable(Routes.PROVIDER_PROFILE) {
+            // Take the VM here too so we can observe the signed-out flag
+            // without forcing the screen to know about it.
+            val vm: ProviderProfileViewModel = hiltViewModel()
+            val signedOut by vm.signedOut.collectAsState()
+            LaunchedEffect(signedOut) {
+                if (signedOut) {
+                    nav.navigate(Routes.WELCOME) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+            ProviderProfileScreen(
+                onTabClick = { nav.switchProviderTab(it) },
+                onEditProfile = { /* TODO: edit profile screen */ },
+                onServicesAndRates = { /* TODO: services & rates screen */ },
+                onPaymentAndPayouts = { nav.navigate(Routes.PROVIDER_EARNINGS) },
+                onReviews = { nav.navigate(Routes.PROVIDER_REVIEWS) },
+                onHelp = { /* TODO: help & support */ },
+                viewModel = vm,
+            )
+        }
+
+        // ── Provider sub-screens ──
+
+        composable(Routes.PROVIDER_EARNINGS) {
+            ProviderEarningsScreen(
+                onBack = { nav.popBackStack() },
+                onTabClick = { nav.switchProviderTab(it) },
+                // No withdraw endpoint flow yet — see TODO in screen. For now
+                // we surface a no-op; once /payments/withdrawals gets a
+                // confirmation UI, this routes there.
+                onWithdraw = { /* TODO: withdrawal flow */ },
+            )
+        }
+
+        composable(Routes.PROVIDER_REVIEWS) {
+            ProviderReviewsScreen(
+                onBack = { nav.popBackStack() },
+                onTabClick = { nav.switchProviderTab(it) },
+            )
+        }
+
+        composable(
+            Routes.JOB_DETAIL,
+            arguments = listOf(navArgument("bookingId") {
+                type = NavType.StringType
+                nullable = false
+            }),
+        ) {
+            JobDetailScreen(
+                onBack = { nav.popBackStack() },
+                onActionCompleted = { nav.popBackStack() },
             )
         }
 
@@ -278,7 +368,6 @@ fun FixItNavGraph(startDestination: String) {
     }
 }
 
-// Bridge so we can grab DevAuthHandler at the NavGraph level via Hilt.
 @dagger.hilt.android.lifecycle.HiltViewModel
 class DevAuthBridge @javax.inject.Inject constructor(val handler: DevAuthHandler)
     : androidx.lifecycle.ViewModel()

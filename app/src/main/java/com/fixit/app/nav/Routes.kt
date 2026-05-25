@@ -5,8 +5,7 @@ import com.fixit.app.domain.model.UserRole
 object Routes {
     const val WELCOME = "welcome"
     const val PHONE   = "phone"
-    // nav/Routes.kt
-    const val OTP = "otp?phone={phone}"
+    const val OTP     = "otp?phone={phone}"
     fun otp(phone: String) = "otp?phone=${java.net.URLEncoder.encode(phone, "UTF-8")}"
 
     const val SIGNUP_GRAPH = "signup"
@@ -22,15 +21,36 @@ object Routes {
     const val PROV_PAYMENT      = "prov_payment"
     const val PROV_RECEIVED     = "prov_received"
 
-    // Provider post-onboarding dashboard.
-    const val PROVIDER_HOME = "provider/home"
+    // ── Provider main tabs ──
+    const val PROVIDER_HOME      = "provider/home"
+    const val PROVIDER_JOBS      = "provider/jobs"
+    const val PROVIDER_CALENDAR  = "provider/calendar"
+    const val PROVIDER_MESSAGES  = "provider/messages"
+    const val PROVIDER_PROFILE   = "provider/profile"
+
+    // ── Provider sub-screens (off-tab) ──
+    const val PROVIDER_EARNINGS  = "provider/earnings"
+    const val PROVIDER_REVIEWS   = "provider/reviews"
+
+    const val JOB_DETAIL = "provider/jobs/{bookingId}"
+    fun jobDetail(bookingId: String) = "provider/jobs/$bookingId"
 
     const val PLACEHOLDER = "placeholder/{role}"
     fun placeholder(role: UserRole) = "placeholder/${role.api}"
 
-    /** Single source of truth for "where does this role go after auth?". */
+    /** Single source of truth for post-auth landing. */
     fun home(role: UserRole): String = when (role) {
         UserRole.PROVIDER -> PROVIDER_HOME
         else              -> placeholder(role)
+    }
+
+    /** Maps tab id from ProviderTabBar → route. Used by every provider tab screen. */
+    fun providerTab(tabId: String): String = when (tabId) {
+        "home"     -> PROVIDER_HOME
+        "jobs"     -> PROVIDER_JOBS
+        "calendar" -> PROVIDER_CALENDAR
+        "messages" -> PROVIDER_MESSAGES
+        "profile"  -> PROVIDER_PROFILE
+        else       -> PROVIDER_HOME
     }
 }

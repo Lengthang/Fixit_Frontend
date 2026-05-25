@@ -8,8 +8,8 @@ object DevConfig {
     val DEV_MODE: Boolean = BuildConfig.DEV_MODE
 
     val testUsers = listOf(
-        DevTestUser("Customer (Alice)", "+15550000001", UserRole.CUSTOMER),
-        DevTestUser("Provider (Bob)",   "+15550000002", UserRole.PROVIDER),
+        DevTestUser("Customer (Alice)", "+85570209098", UserRole.CUSTOMER),
+        DevTestUser("Provider (Bob)",   "+85570209097", UserRole.PROVIDER),
         DevTestUser("Admin (Carol)",    "+15550000003", UserRole.ADMIN),
     )
 

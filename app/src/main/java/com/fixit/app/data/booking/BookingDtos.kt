@@ -29,11 +29,6 @@ data class BookingItemResponse(
     @Json(name = "duration_minutes") val durationMinutes: Int? = null,
 )
 
-/**
- * Subset of the backend's BookingResponse — the home screen only needs
- * these fields. Moshi ignores unknown JSON keys, so omitting
- * `status_history` etc. is safe.
- */
 @JsonClass(generateAdapter = true)
 data class BookingResponse(
     val id: String,
@@ -54,4 +49,28 @@ data class BookingResponse(
     val customer: BookingCustomerSummary? = null,
     val provider: BookingProviderUserSummary? = null,
     val items: List<BookingItemResponse> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class BookingStatusUpdate(
+    val status: String,
+)
+
+/**
+ * Response from `GET /bookings/{id}/payout`.
+ *
+ * All monetary fields come over the wire as JSON numbers (FastAPI's default
+ * Decimal encoder converts to float). We widen to BigDecimal at the mapper
+ * layer to avoid Double precision creep when amounts are summed.
+ */
+@JsonClass(generateAdapter = true)
+data class BookingPayoutResponse(
+    @Json(name = "booking_id") val bookingId: String,
+    val currency: String = "SGD",
+    @Json(name = "gross_amount") val grossAmount: Double = 0.0,
+    @Json(name = "provider_payout") val providerPayout: Double = 0.0,
+    @Json(name = "platform_commission") val platformCommission: Double = 0.0,
+    @Json(name = "commission_rate") val commissionRate: Double = 0.0,
+    @Json(name = "escrow_status") val escrowStatus: String,
+    @Json(name = "is_estimate") val isEstimate: Boolean,
 )
