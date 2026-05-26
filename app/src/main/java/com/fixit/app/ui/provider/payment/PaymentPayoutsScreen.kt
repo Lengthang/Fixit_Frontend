@@ -5,16 +5,21 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -28,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.fixit.app.domain.model.PaymentMethodType
 import com.fixit.app.domain.model.SavedPaymentMethod
 import com.fixit.app.domain.model.TransactionType
 import com.fixit.app.domain.model.WalletTransaction
@@ -38,14 +44,12 @@ import com.fixit.app.ui.components.ProviderTabBar
 import com.fixit.app.ui.theme.C
 import com.fixit.app.ui.util.formatMoney
 import java.math.BigDecimal
-import java.math.RoundingMode
+import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlin.time.toJavaInstant
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.CreditCard
-import com.fixit.app.domain.model.PaymentMethodType
 import kotlin.math.abs
+import kotlin.time.toJavaInstant
 
 @Composable
 fun PaymentPayoutsScreen(
@@ -55,8 +59,8 @@ fun PaymentPayoutsScreen(
     onSeeAllHistory: () -> Unit,
     viewModel: PaymentPayoutsViewModel = hiltViewModel(),
 ) {
-    val state           by viewModel.state.collectAsState()
-    val snackbarState   = remember { SnackbarHostState() }
+    val state         by viewModel.state.collectAsState()
+    val snackbarState = remember { SnackbarHostState() }
 
     // Collect one-shot effects
     LaunchedEffect(Unit) {
@@ -72,37 +76,8 @@ fun PaymentPayoutsScreen(
     }
 
     FixItScreen(bg = C.Subtle) {
-        // ── Top bar ──────────────────────────────────────────────────────────
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(Color.White)
-                .padding(horizontal = 20.dp)
-                .padding(top = 16.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = C.Ink,
-                modifier = Modifier.size(22.dp).clickable { onBack() },
-            )
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "Payment & payouts",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = C.Ink,
-                )
-                Text(
-                    "Earnings, methods & withdrawals",
-                    fontSize = 11.5.sp,
-                    color = C.Slate,
-                    modifier = Modifier.padding(top = 1.dp),
-                )
-            }
-        }
+        // ── Top bar ───────────────────────────────────────────────────────────
+        PaymentTopBar(title = "Payment & payouts", onBack = onBack)
 
         // ── Scrollable body ───────────────────────────────────────────────────
         Box(Modifier.weight(1f)) {
@@ -111,329 +86,128 @@ fun PaymentPayoutsScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState()),
             ) {
+                // ── Balance hero card ─────────────────────────────────────────
+                BalanceHeroCard(
+                    balance       = state.balance,
+                    onWithdraw    = { viewModel.onWithdrawClicked() },
+                    onHistory     = { onSeeAllHistory() },
+                )
 
-                // ── Balance hero ──────────────────────────────────────────────
-                Box(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp)) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(C.Blue)
-                            .padding(18.dp)
-                    ) {
-                        // Decorative circles
-                        Box(
-                            Modifier
-                                .size(140.dp)
-                                .clip(RoundedCornerShape(70.dp))
-                                .background(C.Orange.copy(alpha = 0.2f))
-                                .align(Alignment.TopEnd)
-                                .offset(x = 30.dp, y = (-40).dp)
-                        )
-                        Box(
-                            Modifier
-                                .size(90.dp)
-                                .clip(RoundedCornerShape(45.dp))
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .align(Alignment.BottomEnd)
-                                .offset(x = (-30).dp, y = 40.dp)
-                        )
+                // ── Snapshot stats row ────────────────────────────────────────
+                SnapshotStatsRow(
+                    state = state,
+                )
 
-                        Column {
-                            Text(
-                                "AVAILABLE TO WITHDRAW",
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.4.sp,
-                            )
-                            Text(
-                                formatMoney(state.balance),
-                                color = Color.White,
-                                fontSize = 38.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = (-1).sp,
-                                modifier = Modifier.padding(top = 6.dp),
-                            )
-                            // Action buttons
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                // Withdraw
-                                Box(
-                                    Modifier
-                                        .weight(1f)
-                                        .height(44.dp)
-                                        .clip(RoundedCornerShape(22.dp))
-                                        .background(C.Orange)
-                                        .clickable(enabled = state.balance.signum() > 0) {
-                                            viewModel.onWithdrawClicked()
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    ) {
-                                        Icon(
-                                            Icons.Filled.ArrowDownward,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(15.dp),
-                                        )
-                                        Text(
-                                            "Withdraw",
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                        )
-                                    }
-                                }
-                                // History
-                                Box(
-                                    Modifier
-                                        .weight(1f)
-                                        .height(44.dp)
-                                        .clip(RoundedCornerShape(22.dp))
-                                        .background(Color.White.copy(alpha = 0.16f))
-                                        .border(
-                                            1.5.dp,
-                                            Color.White.copy(alpha = 0.3f),
-                                            RoundedCornerShape(22.dp),
-                                        )
-                                        .clickable { onSeeAllHistory() },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        "History",
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ── This week chart ───────────────────────────────────────────
-                Box(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp)) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color.White)
-                            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
-                            .padding(14.dp),
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("This week", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = C.Ink)
-                        }
-
-                        val maxBar = state.weeklyBars.maxOrNull() ?: BigDecimal.ZERO
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(70.dp)
-                                .padding(top = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.Bottom,
-                        ) {
-                            val labels = listOf("M", "T", "W", "T", "F", "S", "S")
-                            val todayIdx = java.time.LocalDate.now().dayOfWeek.value - 1
-                            state.weeklyBars.forEachIndexed { i, value ->
-                                val frac = if (maxBar.signum() == 0) 0f
-                                else value.divide(maxBar, 4, RoundingMode.HALF_UP).toFloat()
-                                Column(
-                                    Modifier.weight(1f),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Bottom,
-                                ) {
-                                    Box(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .fillMaxHeight(frac.coerceAtLeast(0.04f))
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(
-                                                if (i == todayIdx) C.Orange
-                                                else C.Blue.copy(alpha = 0.85f)
-                                            )
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(labels[i], fontSize = 9.5.sp, color = C.Mute)
-                                }
-                            }
-                        }
-
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(top = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                formatMoney(state.thisWeekTotal),
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = C.Ink,
-                                letterSpacing = (-0.4).sp,
-                            )
-                            state.weekChangePercent?.let { pct ->
-                                val positive = pct >= 0
-                                Text(
-                                    "${if (positive) "↑" else "↓"} ${abs(pct)}% vs last week",
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (positive) C.GreenText else C.Slate,
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // ── Payment methods ────────────────────────────────────────────
-                Spacer(Modifier.height(18.dp))
-                Row(
-                    Modifier.padding(horizontal = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "PAYMENT METHODS",
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = C.Slate,
-                        letterSpacing = 0.4.sp,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        "+ Add new",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = C.Blue,
-                        modifier = Modifier.clickable { viewModel.showAddMethodSheet() },
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
+                // ── Payout methods section ────────────────────────────────────
+                SectionLabel(
+                    "Payout methods",
+                    modifier = Modifier.padding(
+                        start = 20.dp, end = 20.dp, top = 18.dp, bottom = 10.dp
+                    ),
+                )
 
                 if (state.methods.isEmpty() && !state.isLoading) {
                     Box(Modifier.padding(horizontal = 20.dp)) {
                         EmptyState(
-                            title = "No payment methods yet",
+                            title    = "No payout methods yet",
                             subtitle = "Add a bank account or card to receive payouts",
                         )
                     }
                 } else {
                     Column(
-                        Modifier.padding(horizontal = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        Modifier
+                            .padding(horizontal = 20.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+                            .background(C.Bg),
                     ) {
-                        state.methods.forEach { method ->
-                            PaymentMethodTile(
-                                method     = method,
+                        state.methods.forEachIndexed { idx, method ->
+                            PayoutMethodRow(
+                                method       = method,
+                                showDivider  = idx != state.methods.lastIndex,
                                 onSetDefault = { viewModel.setDefault(method.id) },
-                                onDelete   = { viewModel.deleteMethod(method.id) },
+                                onDelete     = { viewModel.deleteMethod(method.id) },
                             )
                         }
                     }
                 }
 
-                // ── Add new method CTA (dashed) ─────────────────────────────
-                Box(
-                    Modifier
-                        .padding(horizontal = 20.dp)
-                        .padding(top = 10.dp),
-                ) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color.White)
-                            .border(1.5.dp, C.Line, RoundedCornerShape(14.dp))
-                            .clickable { viewModel.showAddMethodSheet() }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Box(
-                            Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(C.BlueSoft),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("+", fontSize = 20.sp, color = C.Blue, fontWeight = FontWeight.Light)
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Add payment method",
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = C.Blue,
-                            )
-                            Text(
-                                "Bank or card",
-                                fontSize = 11.sp,
-                                color = C.Slate,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-                        Icon(
-                            Icons.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = C.Blue,
-                            modifier = Modifier.size(18.dp),
+                // ── Add method row (separate card) ────────────────────────────
+                AddMethodRow(onClick = { viewModel.showAddMethodSheet() })
+
+                // ── Auto-payout notice (only when a default exists) ───────────
+                state.defaultMethod?.let { default ->
+                    if (state.balance.signum() > 0) {
+                        AutoPayoutNotice(
+                            method  = default,
+                            balance = state.balance,
                         )
                     }
                 }
 
-                // ── Recent payouts ─────────────────────────────────────────────
-                Spacer(Modifier.height(18.dp))
+                // ── Recent payouts ────────────────────────────────────────────
                 Row(
-                    Modifier.padding(horizontal = 20.dp),
+                    Modifier
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 8.dp, bottom = 10.dp)
+                        .fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        "RECENT PAYOUTS",
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = C.Slate,
-                        letterSpacing = 0.4.sp,
-                        modifier = Modifier.weight(1f),
-                    )
+                    SectionLabel("Recent payouts", modifier = Modifier.weight(1f))
                     Text(
                         "See all",
-                        fontSize = 12.sp,
+                        fontSize   = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = C.Blue,
-                        modifier = Modifier.clickable { onSeeAllHistory() },
+                        color      = C.Blue,
+                        modifier   = Modifier.clickable { onSeeAllHistory() },
                     )
                 }
-                Spacer(Modifier.height(10.dp))
 
                 if (state.recentTransactions.isEmpty() && !state.isLoading) {
                     Box(Modifier.padding(horizontal = 20.dp)) {
                         EmptyState(
-                            title = "No transactions yet",
+                            title    = "No transactions yet",
                             subtitle = "Completed jobs and withdrawals will appear here",
                         )
                     }
                 } else {
                     Column(
-                        Modifier.padding(horizontal = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        Modifier
+                            .padding(horizontal = 20.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+                            .background(C.Bg),
                     ) {
-                        state.recentTransactions.forEach { tx ->
-                            PayoutRow(tx)
+                        val recent = state.recentTransactions.take(4)
+                        recent.forEachIndexed { idx, tx ->
+                            PayoutHistoryRow(
+                                tx          = tx,
+                                showDivider = idx != recent.lastIndex,
+                            )
                         }
                     }
+                }
+
+                // ── View all history button ───────────────────────────────────
+                Box(
+                    Modifier
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .clip(RoundedCornerShape(23.dp))
+                        .border(1.5.dp, C.Line, RoundedCornerShape(23.dp))
+                        .background(C.Bg)
+                        .clickable { onSeeAllHistory() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "View all history",
+                        fontSize   = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color      = C.Slate,
+                    )
                 }
 
                 Spacer(Modifier.height(24.dp))
@@ -465,7 +239,7 @@ fun PaymentPayoutsScreen(
             onSetMax              = { viewModel.setMaxWithdrawAmount() },
             onSelectMethod        = { viewModel.selectMethodForWithdraw(it) },
             onSaveAsDefaultChange = { viewModel.setSaveAsDefault(it) },
-            onAddMethod          = {
+            onAddMethod           = {
                 viewModel.dismissWithdrawSheet()
                 viewModel.showAddMethodSheet()
             },
@@ -477,26 +251,277 @@ fun PaymentPayoutsScreen(
     // ── Add method sheet ──────────────────────────────────────────────────────
     if (state.showAddMethodSheet) {
         AddPaymentMethodSheet(
-            methodType       = state.addMethodType,
-            displayName      = state.addMethodDisplayName,
-            lastFour         = state.addMethodLastFour,
-            isDefault        = state.addMethodIsDefault,
-            isSubmitting     = state.isAddingMethod,
-            onTypeChange     = { viewModel.updateAddMethodType(it) },
+            methodType          = state.addMethodType,
+            displayName         = state.addMethodDisplayName,
+            lastFour            = state.addMethodLastFour,
+            isDefault           = state.addMethodIsDefault,
+            isSubmitting        = state.isAddingMethod,
+            onTypeChange        = { viewModel.updateAddMethodType(it) },
             onDisplayNameChange = { viewModel.updateAddMethodDisplayName(it) },
-            onLastFourChange = { viewModel.updateAddMethodLastFour(it) },
-            onIsDefaultChange = { viewModel.updateAddMethodIsDefault(it) },
-            onSubmit         = { viewModel.submitAddMethod() },
-            onDismiss        = { viewModel.dismissAddMethodSheet() },
+            onLastFourChange    = { viewModel.updateAddMethodLastFour(it) },
+            onIsDefaultChange   = { viewModel.updateAddMethodIsDefault(it) },
+            onSubmit            = { viewModel.submitAddMethod() },
+            onDismiss           = { viewModel.dismissAddMethodSheet() },
         )
     }
 }
 
-// ── Payment method tile ───────────────────────────────────────────────────────
+// ── Top bar ────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PaymentMethodTile(
+private fun PaymentTopBar(title: String, onBack: () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(C.Bg)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(C.Subtle)
+                    .clickable { onBack() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint     = C.Ink,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Text(
+                title,
+                fontSize      = 16.sp,
+                fontWeight    = FontWeight.Bold,
+                color         = C.Ink,
+                letterSpacing = (-0.2).sp,
+                modifier      = Modifier.weight(1f),
+            )
+        }
+        HorizontalDivider(color = C.Line)
+    }
+}
+
+// ── Balance hero card ──────────────────────────────────────────────────────────
+
+@Composable
+private fun BalanceHeroCard(
+    balance: BigDecimal,
+    onWithdraw: () -> Unit,
+    onHistory: () -> Unit,
+) {
+    Box(
+        Modifier
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(C.Blue),
+    ) {
+        // Decorative circle (top-right)
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = 30.dp, y = (-40).dp)
+                .size(140.dp)
+                .clip(CircleShape)
+                .background(C.Orange.copy(alpha = 0.18f)),
+        )
+        // Decorative circle (bottom-left)
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = (-30).dp, y = 40.dp)
+                .size(90.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.06f)),
+        )
+
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+        ) {
+            Text(
+                "AVAILABLE TO WITHDRAW",
+                fontSize      = 11.sp,
+                fontWeight    = FontWeight.Medium,
+                color         = Color.White.copy(alpha = 0.85f),
+                letterSpacing = 0.4.sp,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                formatMoney(balance),
+                fontSize      = 36.sp,
+                fontWeight    = FontWeight.ExtraBold,
+                color         = Color.White,
+                letterSpacing = (-1).sp,
+            )
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                // Withdraw
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(C.Orange)
+                        .clickable(enabled = balance.signum() > 0) { onWithdraw() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.ArrowDownward,
+                            contentDescription = null,
+                            tint     = Color.White,
+                            modifier = Modifier.size(15.dp),
+                        )
+                        Text(
+                            "Withdraw",
+                            color      = Color.White,
+                            fontSize   = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+                // History
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .border(1.5.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(22.dp))
+                        .background(Color.White.copy(alpha = 0.12f))
+                        .clickable { onHistory() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "History",
+                        color      = Color.White,
+                        fontSize   = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── Snapshot stats row ─────────────────────────────────────────────────────────
+
+@Composable
+private fun SnapshotStatsRow(state: PaymentPayoutsState) {
+    val weekDelta = state.weekChangePercent
+    val weekTrend = weekDelta?.let {
+        val arrow = if (it >= 0) "↑" else "↓"
+        "$arrow ${abs(it)}%"
+    } ?: "—"
+    val weekTrendColor = when {
+        weekDelta == null  -> C.Mute
+        weekDelta >= 0     -> C.GreenText
+        else               -> C.Slate
+    }
+
+    val nextPayoutLabel = nextFridayLabel()
+
+    val jobsDoneCount = state.recentTransactions.count { it.type == TransactionType.RELEASE }
+    val jobsThisWeek  = state.recentTransactions.count {
+        it.type == TransactionType.RELEASE && isThisWeek(it)
+    }
+
+    Row(
+        Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+            .background(C.Bg)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SnapStat(
+            value      = formatMoney(state.thisWeekTotal),
+            label      = "This week",
+            trend      = weekTrend,
+            trendColor = weekTrendColor,
+        )
+        VertDivider()
+        SnapStat(
+            value      = formatMoney(state.balance),
+            label      = "Pending payout",
+            trend      = nextPayoutLabel,
+            trendColor = C.Mute,
+        )
+        VertDivider()
+        SnapStat(
+            value      = jobsDoneCount.toString(),
+            label      = "Jobs done",
+            trend      = "$jobsThisWeek this week",
+            trendColor = C.Mute,
+        )
+    }
+}
+
+@Composable
+private fun RowScope.SnapStat(
+    value: String,
+    label: String,
+    trend: String,
+    trendColor: Color,
+) {
+    Column(
+        Modifier.weight(1f),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            value,
+            fontSize      = 16.sp,
+            fontWeight    = FontWeight.ExtraBold,
+            color         = C.Ink,
+            letterSpacing = (-0.3).sp,
+        )
+        Text(
+            label,
+            fontSize   = 10.sp,
+            color      = C.Slate,
+            fontWeight = FontWeight.Medium,
+            modifier   = Modifier.padding(top = 1.dp),
+        )
+        Text(
+            trend,
+            fontSize   = 10.sp,
+            color      = trendColor,
+            fontWeight = FontWeight.SemiBold,
+            modifier   = Modifier.padding(top = 2.dp),
+        )
+    }
+}
+
+@Composable
+private fun VertDivider() {
+    Box(
+        Modifier
+            .width(1.dp)
+            .height(40.dp)
+            .background(C.Line),
+    )
+}
+
+// ── Payout method row (inside grouped card) ───────────────────────────────────
+
+@Composable
+private fun PayoutMethodRow(
     method: SavedPaymentMethod,
+    showDivider: Boolean,
     onSetDefault: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -505,100 +530,86 @@ private fun PaymentMethodTile(
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.White)
-            .border(
-                1.5.dp,
-                if (method.isDefault) C.Blue else C.Line,
-                RoundedCornerShape(14.dp),
-            )
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Icon
         MethodIcon(method)
-
-        // Details
         Column(Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(method.displayName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = C.Ink)
-                if (method.isDefault) {
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(C.Blue)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            "✓  Default",
-                            fontSize = 9.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            letterSpacing = 0.3.sp,
-                        )
-                    }
-                }
-            }
+            Text(
+                method.displayName,
+                fontSize   = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color      = C.Ink,
+            )
             if (method.lastFour != null) {
                 Text(
                     "••${method.lastFour}",
                     fontSize = 12.sp,
-                    color = C.Slate,
+                    color    = C.Slate,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
-            if (!method.isDefault) {
+        }
+        if (method.isDefault) {
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(C.GreenSoft)
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
+            ) {
                 Text(
-                    "Set as default",
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = C.Blue,
-                    modifier = Modifier
-                        .padding(top = 8.dp)
-                        .clickable { onSetDefault() },
+                    "DEFAULT",
+                    fontSize      = 9.sp,
+                    fontWeight    = FontWeight.Bold,
+                    color         = C.GreenText,
+                    letterSpacing = 0.4.sp,
                 )
             }
         }
-
-        // Three-dot overflow
         Box {
             Box(
                 Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .size(28.dp)
+                    .clip(CircleShape)
                     .background(C.Subtle)
                     .clickable { menuExpanded = true },
                 contentAlignment = Alignment.Center,
             ) {
-                Text("•••", fontSize = 12.sp, color = C.Slate, letterSpacing = 1.sp)
+                Icon(
+                    Icons.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint     = C.Mute,
+                    modifier = Modifier.size(18.dp),
+                )
             }
             DropdownMenu(
-                expanded = menuExpanded,
+                expanded         = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
             ) {
                 if (!method.isDefault) {
                     DropdownMenuItem(
-                        text = { Text("Set as default", fontSize = 13.sp) },
+                        text    = { Text("Set as default", fontSize = 13.sp) },
                         onClick = { menuExpanded = false; onSetDefault() },
                     )
                 }
                 DropdownMenuItem(
-                    text = { Text("Remove", fontSize = 13.sp, color = Color(0xFFDC2626)) },
+                    text    = { Text("Remove", fontSize = 13.sp, color = Color(0xFFDC2626)) },
                     onClick = { menuExpanded = false; onDelete() },
                 )
             }
         }
     }
+    if (showDivider) {
+        HorizontalDivider(
+            color    = C.Line,
+            modifier = Modifier.padding(start = 64.dp),
+        )
+    }
 }
 
-// ── Method icon ───────────────────────────────────────────────────────────────
-
 @Composable
-internal fun MethodIcon(method: SavedPaymentMethod, size: Int = 44) {
+internal fun MethodIcon(method: SavedPaymentMethod, size: Int = 38) {
     val bg = when (method.type) {
         PaymentMethodType.BANK -> C.Blue
         PaymentMethodType.CARD -> C.Ink
@@ -606,7 +617,7 @@ internal fun MethodIcon(method: SavedPaymentMethod, size: Int = 44) {
     Box(
         Modifier
             .size(size.dp)
-            .clip(RoundedCornerShape(11.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(bg),
         contentAlignment = Alignment.Center,
     ) {
@@ -616,15 +627,107 @@ internal fun MethodIcon(method: SavedPaymentMethod, size: Int = 44) {
                 PaymentMethodType.CARD -> Icons.Filled.CreditCard
             },
             contentDescription = null,
-            tint = Color.White,
+            tint     = Color.White,
             modifier = Modifier.size((size * 0.5f).dp),
         )
     }
 }
-// ── Recent payout row ─────────────────────────────────────────────────────────
+
+// ── Add method row (separate card under methods list) ─────────────────────────
 
 @Composable
-private fun PayoutRow(tx: WalletTransaction) {
+private fun AddMethodRow(onClick: () -> Unit) {
+    Row(
+        Modifier
+            .padding(start = 20.dp, end = 20.dp, top = 8.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.5.dp, C.Line, RoundedCornerShape(12.dp))
+            .background(C.Bg)
+            .clickable { onClick() }
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(C.BlueSoft),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "+",
+                fontSize   = 22.sp,
+                color      = C.Blue,
+                fontWeight = FontWeight.Light,
+            )
+        }
+        Text(
+            "Add payout method",
+            fontSize   = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color      = C.Blue,
+            modifier   = Modifier.weight(1f),
+        )
+        Icon(
+            Icons.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint     = C.Mute,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+// ── Auto-payout notice (blue soft pill) ────────────────────────────────────────
+
+@Composable
+private fun AutoPayoutNotice(method: SavedPaymentMethod, balance: BigDecimal) {
+    Row(
+        Modifier
+            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(C.BlueSoft)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(C.Blue),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Event,
+                contentDescription = null,
+                tint     = Color.White,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Automatic payout scheduled",
+                fontSize   = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color      = C.BlueDark,
+            )
+            Text(
+                "${nextFridayLabel()} · ${formatMoney(balance)} → ${method.shortLabel}",
+                fontSize = 11.sp,
+                color    = C.BlueDark.copy(alpha = 0.75f),
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+// ── Recent payout row (inside grouped card) ────────────────────────────────────
+
+@Composable
+private fun PayoutHistoryRow(tx: WalletTransaction, showDivider: Boolean) {
     val isIncome = tx.amount.signum() > 0
     val sign     = if (isIncome) "+" else "−"
     val label    = tx.description?.takeIf { it.isNotBlank() }
@@ -638,14 +741,11 @@ private fun PayoutRow(tx: WalletTransaction) {
         }
     val date = tx.createdAt.toJavaInstant()
         .atZone(ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
+        .format(DateTimeFormatter.ofPattern("MMM d"))
 
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color.White)
-            .border(1.dp, C.Line, RoundedCornerShape(10.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -654,19 +754,52 @@ private fun PayoutRow(tx: WalletTransaction) {
             Icon(
                 if (isIncome) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
                 contentDescription = null,
-                tint = if (isIncome) C.GreenText else C.Blue,
+                tint     = if (isIncome) C.GreenText else C.Blue,
                 modifier = Modifier.size(16.dp),
             )
         }
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
-            Text(date, fontSize = 10.5.sp, color = C.Mute, modifier = Modifier.padding(top = 1.dp))
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
+            Text(date, fontSize = 11.sp, color = C.Mute, modifier = Modifier.padding(top = 1.dp))
         }
         Text(
             "$sign${formatMoney(tx.amount.abs())}",
-            fontSize = 13.sp,
+            fontSize   = 14.sp,
             fontWeight = FontWeight.Bold,
-            color = if (isIncome) C.GreenText else C.Ink,
+            color      = if (isIncome) C.GreenText else C.Ink,
         )
     }
+    if (showDivider) HorizontalDivider(color = C.Line)
+}
+
+// ── Shared helpers ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text          = text.uppercase(),
+        fontSize      = 11.sp,
+        fontWeight    = FontWeight.Bold,
+        color         = C.Slate,
+        letterSpacing = 0.5.sp,
+        modifier      = modifier,
+    )
+}
+
+/** "Fri Apr 25" — the next Friday relative to today. */
+private fun nextFridayLabel(): String {
+    val today = LocalDate.now()
+    val daysUntilFriday = ((DayOfWeek.FRIDAY.value - today.dayOfWeek.value + 7) % 7)
+        .let { if (it == 0) 7 else it }
+    val next = today.plusDays(daysUntilFriday.toLong())
+    return next.format(DateTimeFormatter.ofPattern("EEE MMM d"))
+}
+
+/** True when the transaction's createdAt falls in the current ISO week. */
+private fun isThisWeek(tx: WalletTransaction): Boolean {
+    val zone   = ZoneId.systemDefault()
+    val today  = LocalDate.now(zone)
+    val txDate = tx.createdAt.toJavaInstant().atZone(zone).toLocalDate()
+    val weekStart = today.minusDays((today.dayOfWeek.value - 1).toLong())
+    return !txDate.isBefore(weekStart) && !txDate.isAfter(today)
 }

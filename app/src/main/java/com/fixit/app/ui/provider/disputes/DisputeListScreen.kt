@@ -10,9 +10,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -39,44 +38,43 @@ import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.ProviderTabBar
 import com.fixit.app.ui.theme.C
 import com.fixit.app.ui.util.avatarColorFor
+import com.fixit.app.ui.util.formatMoney
 import com.fixit.app.ui.util.initialsFor
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import java.math.BigDecimal
+import kotlin.time.Clock
+import kotlin.time.Instant
 
-// ── Dispute-specific colour constants ─────────────────────────────────────
-private val RedSoft        = Color(0xFFFEE2E2)
-private val RedText        = Color(0xFFB91C1C)
-private val RedDark        = Color(0xFF991B1B)
-private val RedFill        = Color(0xFFFEF2F2)
-private val ReviewSoft     = Color(0xFFFFF1E8)
-private val ReviewText     = Color(0xFFB8430B)
+// ── Dispute-specific colour constants (shared with DisputeDetailScreen) ───
+internal val DspRed        = Color(0xFFEF4444)
+internal val DspRedSoft    = Color(0xFFFEE2E2)
+internal val DspRedText    = Color(0xFFB91C1C)
+internal val DspRedDark    = Color(0xFF991B1B)
+internal val DspGreen      = Color(0xFF10B981)
+internal val DspGreenDark  = Color(0xFF047857)
+internal val DspOrangeText = Color(0xFFB8430B)
 
-// ── Status badge ──────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────
+// Status badge (also reused by DisputeDetailScreen)
+// ──────────────────────────────────────────────────────────────────────────
 @Composable
 fun DisputeStatusBadge(status: DisputeStatus, large: Boolean = false) {
-    val (bg, fg, label) = when (status) {
-        DisputeStatus.PENDING_RESPONSE -> Triple(RedSoft,    RedText,    "Pending response")
-        DisputeStatus.AWAITING_REVIEW  -> Triple(ReviewSoft, ReviewText, "Awaiting review")
-        DisputeStatus.RESOLVED         -> Triple(C.GreenSoft, Color(0xFF047857), "Resolved")
+    val (text, bg, fg) = when (status) {
+        DisputeStatus.PENDING_RESPONSE -> Triple("Pending response", C.OrangeSoft, DspOrangeText)
+        DisputeStatus.AWAITING_REVIEW  -> Triple("Awaiting review",  C.BlueSoft,   C.BlueDark)
+        DisputeStatus.RESOLVED         -> Triple("Resolved",          C.GreenSoft,  DspGreenDark)
     }
-    Row(
+    Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(5.dp))
             .background(bg)
-            .padding(horizontal = if (large) 10.dp else 8.dp, vertical = if (large) 5.dp else 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(
+                horizontal = if (large) 8.dp else 6.dp,
+                vertical   = if (large) 3.dp else 2.dp,
+            ),
     ) {
-        Box(
-            Modifier
-                .size(5.dp)
-                .clip(CircleShape)
-                .background(fg)
-        )
         Text(
-            label,
-            fontSize = if (large) 11.sp else 10.sp,
+            text.uppercase(),
+            fontSize = if (large) 10.sp else 9.sp,
             fontWeight = FontWeight.Bold,
             color = fg,
             letterSpacing = 0.3.sp,
@@ -84,7 +82,9 @@ fun DisputeStatusBadge(status: DisputeStatus, large: Boolean = false) {
     }
 }
 
-// ── Screen ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────
+// Screen
+// ──────────────────────────────────────────────────────────────────────────
 @Composable
 fun DisputeListScreen(
     onBack: () -> Unit,
@@ -102,108 +102,129 @@ fun DisputeListScreen(
         }
     }
 
+    // ── Aggregated total disputed amount (UI-only derived value) ────────────
+    val totalDisputed: BigDecimal = remember(state.disputes) {
+        state.disputes
+            .filter { it.disputeStatus != DisputeStatus.RESOLVED }
+            .mapNotNull { it.totalAmount }
+            .fold(BigDecimal.ZERO) { acc, v -> acc + v }
+    }
+
     FixItScreen(bg = C.Subtle) {
-        // ── Header ────────────────────────────────────────────────────────
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(Color.White)
-                .padding(horizontal = 20.dp)
-                .padding(top = 16.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                null,
-                tint = C.Ink,
-                modifier = Modifier.size(22.dp).clickable { onBack() },
-            )
-            Column(Modifier.weight(1f)) {
-                Text("Dispute History", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.Ink)
-                if (!state.isLoading) {
-                    val awaitingText = if (state.pendingCount > 0)
-                        " · ${state.pendingCount} awaiting your response"
-                    else ""
-                    Text(
-                        "${state.disputes.size} total$awaitingText",
-                        fontSize = 11.5.sp,
-                        color = C.Slate,
-                        modifier = Modifier.padding(top = 1.dp),
+
+        // ── Top bar ───────────────────────────────────────────────────────
+        Column(Modifier.fillMaxWidth().background(C.Bg)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(C.Subtle)
+                        .clickable { onBack() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = null,
+                        tint = C.Ink,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Disputes",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = C.Ink,
+                        letterSpacing = (-0.2).sp,
+                    )
+                    if (!state.isLoading) {
+                        val total = state.disputes.size
+                        val open  = state.openCount
+                        val label = when {
+                            total == 0 -> "No disputes"
+                            else       -> "$total ${if (total == 1) "dispute" else "disputes"} · $open open"
+                        }
+                        Text(label, fontSize = 12.sp, color = C.Slate)
+                    }
+                }
             }
+            HorizontalDivider(color = C.Line)
         }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                // ── Summary card ──────────────────────────────────────────
-                Box(Modifier.padding(horizontal = 20.dp).padding(top = 14.dp)) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color.White)
-                            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        SummaryCell(
-                            count = state.pendingCount,
-                            label = "Need response",
-                            tint = RedText,
-                        )
-                        Box(Modifier.width(1.dp).height(36.dp).background(C.Line))
-                        SummaryCell(
-                            count = state.reviewCount,
-                            label = "In review",
-                            tint = ReviewText,
-                        )
-                        Box(Modifier.width(1.dp).height(36.dp).background(C.Line))
-                        SummaryCell(
-                            count = state.resolvedCount,
-                            label = "Resolved",
-                            tint = Color(0xFF047857),
-                        )
-                    }
+            Column(Modifier.fillMaxSize()) {
+
+                // ── Summary stats card ────────────────────────────────────
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+                        .background(C.Bg)
+                        .padding(14.dp),
+                ) {
+                    DspStat(
+                        value = state.openCount.toString(),
+                        label = "Open",
+                        valueColor = C.Orange,
+                    )
+                    DspVertDivider()
+                    DspStat(
+                        value = state.resolvedCount.toString(),
+                        label = "Resolved",
+                        valueColor = DspGreen,
+                    )
+                    DspVertDivider()
+                    DspStat(
+                        value = if (totalDisputed > BigDecimal.ZERO) formatMoney(totalDisputed) else "—",
+                        label = "Disputed",
+                        valueColor = C.Ink,
+                    )
                 }
 
-                // ── Tabs ──────────────────────────────────────────────────
+                // ── Filter pills ──────────────────────────────────────────
                 Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(start = 20.dp, end = 20.dp, top = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    DisputeTab(
+                    DspFilterPill(
                         label = "All",
+                        count = state.disputes.size,
                         active = state.tab == DisputeListTab.ALL,
                         onClick = { viewModel.selectTab(DisputeListTab.ALL) },
                     )
-                    DisputeTab(
+                    DspFilterPill(
                         label = "Open",
+                        count = state.openCount,
                         active = state.tab == DisputeListTab.OPEN,
-                        badge = state.openCount.takeIf { it > 0 }?.toString(),
                         onClick = { viewModel.selectTab(DisputeListTab.OPEN) },
                     )
-                    DisputeTab(
+                    DspFilterPill(
                         label = "Resolved",
+                        count = state.resolvedCount,
                         active = state.tab == DisputeListTab.RESOLVED,
                         onClick = { viewModel.selectTab(DisputeListTab.RESOLVED) },
                     )
                 }
-                Box(
-                    Modifier.fillMaxWidth().height(1.dp).background(C.Line),
-                )
 
                 // ── List ──────────────────────────────────────────────────
                 Column(
-                    Modifier.padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 12.dp, bottom = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     val list = state.displayed
                     if (list.isEmpty() && !state.isLoading) {
@@ -238,203 +259,176 @@ fun DisputeListScreen(
     }
 }
 
-// ── Sub-composables ───────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────
+// Sub-composables
+// ──────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun RowScope.SummaryCell(count: Int, label: String, tint: Color) {
+private fun RowScope.DspStat(value: String, label: String, valueColor: Color) {
     Column(
-        Modifier.weight(1f),
+        modifier = Modifier.weight(1f),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         Text(
-            count.toString(),
-            fontSize = 22.sp,
+            value,
+            fontSize = 17.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = tint,
-            letterSpacing = (-0.4).sp,
+            color = valueColor,
+            letterSpacing = (-0.3).sp,
+            maxLines = 1,
         )
-        Text(label, fontSize = 10.5.sp, color = C.Slate, fontWeight = FontWeight.Medium)
+        Text(label, fontSize = 11.sp, color = C.Slate, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
-private fun DisputeTab(label: String, active: Boolean, badge: String? = null, onClick: () -> Unit) {
-    Column(
+private fun DspVertDivider() {
+    Box(modifier = Modifier.width(1.dp).height(36.dp).background(C.Line))
+}
+
+@Composable
+private fun DspFilterPill(
+    label: String,
+    count: Int,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
         modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .border(
+                1.5.dp,
+                if (active) C.Blue else C.Line,
+                RoundedCornerShape(8.dp),
+            )
+            .background(if (active) C.Blue else C.Bg)
             .clickable(onClick = onClick)
-            .padding(bottom = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        Text(
+            label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (active) Color.White else C.Slate,
+        )
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (active) Color(0x38FFFFFF) else C.Subtle)
+                .padding(horizontal = 5.dp, vertical = 1.dp),
         ) {
             Text(
-                label,
-                fontSize = 13.sp,
-                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                color = if (active) C.Blue else C.Slate,
+                count.toString(),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (active) Color.White else C.Slate,
             )
-            if (badge != null) {
-                Box(
-                    Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(C.Orange)
-                        .padding(horizontal = 6.dp, vertical = 1.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(badge, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                }
-            }
         }
-        Spacer(Modifier.height(6.dp))
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(2.dp)
-                .background(if (active) C.Blue else Color.Transparent),
-        )
     }
 }
 
 @Composable
 private fun DisputeListCard(dispute: Dispute, onClick: () -> Unit) {
-    val isDimmed = dispute.disputeStatus != DisputeStatus.PENDING_RESPONSE
-    val cardBg   = if (isDimmed) C.Subtle else Color.White
-
-    Column(
-        Modifier
+    Row(
+        modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(cardBg)
             .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+            .background(C.Bg)
             .clickable { onClick() }
             .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // ── Row 1: avatar + name + status badge ───────────────────────
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        // Avatar
+        val name = dispute.customerName ?: "Customer"
+        Avatar(
+            initials = initialsFor(name),
+            color    = Color(avatarColorFor(dispute.raisedBy)),
+            size     = 44,
+            fontSize = 14,
+            photoUrl = dispute.customerPhotoUrl,
+        )
+
+        // Middle content
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            val name = dispute.customerName ?: "Customer"
-            Avatar(
-                initials = initialsFor(name),
-                color    = Color(avatarColorFor(dispute.raisedBy)),
-                size     = 40,
-                fontSize = 13,
-                photoUrl = dispute.customerPhotoUrl,
-                modifier = if (isDimmed) Modifier.then(Modifier) else Modifier,
-            )
-            Column(Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Text(
                     name,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isDimmed) C.Slate else C.Ink,
+                    color = C.Ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
-                Text(
-                    "#${dispute.id.takeLast(8).uppercase()}",
-                    fontSize = 11.sp,
-                    color = C.Mute,
-                    modifier = Modifier.padding(top = 1.dp),
-                )
+                DisputeStatusBadge(dispute.disputeStatus)
             }
-            DisputeStatusBadge(dispute.disputeStatus)
-        }
-
-        // ── Row 2: service info block ──────────────────────────────────
-        val infoBg     = if (isDimmed) Color.White else C.Subtle
-        val infoBorder = if (isDimmed) C.Line else Color.Transparent
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(infoBg)
-                .border(1.dp, infoBorder, RoundedCornerShape(10.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            val serviceText = dispute.serviceName ?: "Service"
-            Text(serviceText, fontSize = 12.5.sp, color = C.Ink, fontWeight = FontWeight.SemiBold)
             Text(
-                dispute.scheduledAt?.let { formatDisputeDate(it) } ?: "—",
-                fontSize = 11.sp,
+                text = "${dispute.serviceName ?: "Service"} · #${dispute.bookingId.takeLast(8).uppercase()}",
+                fontSize = 12.sp,
                 color = C.Slate,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            // Reason excerpt
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                modifier = Modifier.padding(top = 3.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Info,
-                    null,
-                    tint = RedText,
-                    modifier = Modifier.size(11.dp),
-                )
-                Text(
-                    dispute.reason,
-                    fontSize = 11.5.sp,
-                    color = C.Slate,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            Text(
+                text = dispute.reason,
+                fontSize = 12.sp,
+                color = C.Mute,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
 
-        // ── Row 3: footer ─────────────────────────────────────────────
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        // Right side: amount + time-ago + chevron
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            val footerText = when (dispute.disputeStatus) {
-                DisputeStatus.PENDING_RESPONSE -> "Action required · respond within 48h"
-                DisputeStatus.AWAITING_REVIEW  -> "Under support team review"
-                DisputeStatus.RESOLVED         -> dispute.resolvedAt
-                    ?.let { "Closed ${formatDisputeDate(it)}" } ?: "Closed"
-            }
-            val footerColor = when (dispute.disputeStatus) {
-                DisputeStatus.PENDING_RESPONSE -> RedText
-                else                           -> C.Mute
-            }
             Text(
-                footerText,
-                fontSize = 11.sp,
-                color = footerColor,
-                fontWeight = if (dispute.disputeStatus == DisputeStatus.PENDING_RESPONSE) FontWeight.SemiBold else FontWeight.Normal,
-                modifier = Modifier.weight(1f),
+                dispute.totalAmount?.let { formatMoney(it) } ?: "—",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = C.Orange,
+                maxLines = 1,
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text("View", fontSize = 12.sp, color = C.Blue, fontWeight = FontWeight.Bold)
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    null,
-                    tint = C.Blue,
-                    modifier = Modifier.size(14.dp),
-                )
-            }
+            Text(
+                formatRelativeAgo(dispute.createdAt),
+                fontSize = 11.sp,
+                color = C.Mute,
+            )
+            Text("›", fontSize = 18.sp, color = C.Mute, fontWeight = FontWeight.Light)
         }
     }
 }
 
-// ── Date formatting ───────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────
+// Relative-time helper (used by the list card)
+// Also exposed as internal so DisputeDetailScreen can reuse it for the banner.
+// ──────────────────────────────────────────────────────────────────────────
+internal fun formatRelativeAgo(instant: Instant): String {
+    val nowMs    = Clock.System.now().toEpochMilliseconds()
+    val targetMs = instant.toEpochMilliseconds()
+    val diffMs   = (nowMs - targetMs).coerceAtLeast(0L)
 
-private val disputeDateFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a", Locale.ENGLISH)
-//
-//private fun formatDisputeDate(instant: kotlin.time.Instant): String = runCatching {
-//    val javaInstant = java.time.Instant.ofEpochMilli(instant.toEpochMilliseconds())
-//    val zdt = javaInstant.atZone(ZoneId.systemDefault())
-//    disputeDateFormatter.format(zdt)
-//}.getOrElse { "—" }
+    val minutes = diffMs / 60_000L
+    val hours   = minutes / 60L
+    val days    = hours / 24L
+    val weeks   = days / 7L
+
+    return when {
+        weeks   >= 1 -> "${weeks}w ago"
+        days    >= 1 -> "${days}d ago"
+        hours   >= 1 -> "${hours}h ago"
+        minutes >= 1 -> "${minutes}m ago"
+        else         -> "just now"
+    }
+}

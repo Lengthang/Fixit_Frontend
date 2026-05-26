@@ -14,16 +14,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -54,17 +54,9 @@ import com.fixit.app.ui.components.Avatar
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.theme.C
 import com.fixit.app.ui.util.avatarColorFor
+import com.fixit.app.ui.util.formatMoney
 import com.fixit.app.ui.util.initialsFor
-
-// ── Colour constants (scoped to this file) ────────────────────────────────
-private val RedSoft    = Color(0xFFFEE2E2)
-private val RedText    = Color(0xFFB91C1C)
-private val RedDark    = Color(0xFF991B1B)
-private val RedFill    = Color(0xFFFEF2F2)
-private val RedBorder  = Color(0xFFEF4444)
-private val ReviewSoft = Color(0xFFFFF1E8)
-private val ReviewText = Color(0xFFB8430B)
-private val ReviewDark = Color(0xFF7C2D12)
+import kotlin.time.Instant
 
 @Composable
 fun DisputeDetailScreen(
@@ -75,7 +67,7 @@ fun DisputeDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showSubmitConfirm by remember { mutableStateOf(false) }
 
-    // Photo picker — up to 5 images at once
+    // Photo picker — up to 5 images
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(maxItems = 5)
     ) { uris: List<Uri> ->
@@ -95,50 +87,17 @@ fun DisputeDetailScreen(
         val dispute = state.dispute
 
         // ── Top bar ───────────────────────────────────────────────────────
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(Color.White)
-                .padding(horizontal = 20.dp)
-                .padding(top = 14.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Box(
-                Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(C.Subtle)
-                    .clickable { onBack() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = C.Ink, modifier = Modifier.size(18.dp))
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = dispute?.let { "Dispute #${it.id.takeLast(8).uppercase()}" } ?: "Dispute",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.2).sp,
-                    color = C.Ink,
-                )
-                dispute?.scheduledAt?.let {
-                    Text(
-                        formatDisputeDate(it),
-                        fontSize = 11.5.sp,
-                        color = C.Slate,
-                        modifier = Modifier.padding(top = 1.dp),
-                    )
-                }
-            }
-            dispute?.let { DisputeStatusBadge(it.disputeStatus, large = true) }
-        }
+        DspDetailTopBar(
+            disputeId = dispute?.id,
+            onBack    = onBack,
+        )
 
         // ── Body ──────────────────────────────────────────────────────────
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 state.isLoading && dispute == null -> Box(
-                    Modifier.fillMaxSize(), contentAlignment = Alignment.Center,
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
                 ) { CircularProgressIndicator(color = C.Blue) }
 
                 dispute != null -> {
@@ -147,46 +106,29 @@ fun DisputeDetailScreen(
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState()),
                     ) {
-                        // Section 1 — Service information
-                        SectionHeader(n = "1", title = "Service information")
-                        ServiceInfoCard(dispute)
-
-                        // Section 2 — Customer's dispute
-                        SectionHeader(n = "2", title = "Customer's dispute")
-                        CustomerClaimCard(
-                            dispute = dispute,
-                            onViewImages = { viewModel.showImages(dispute.reasonImageUrls) },
-                        )
-
-                        // Section 3 — Provider response
-                        SectionHeader(n = "3", title = "Your response")
                         when (dispute.disputeStatus) {
-                            DisputeStatus.PENDING_RESPONSE -> PendingResponseForm(
+                            DisputeStatus.PENDING_RESPONSE -> PendingBody(
+                                dispute = dispute,
                                 state = state,
                                 onTextChange = viewModel::onResponseTextChange,
                                 onAttachImages = {
                                     imagePicker.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                                        )
                                     )
                                 },
                                 onRemoveImage = viewModel::removeUploadedImage,
+                                onViewClaimImages = { viewModel.showImages(dispute.reasonImageUrls) },
                                 onViewUploadedImages = { viewModel.showImages(state.uploadedImageUrls) },
                             )
 
-                            DisputeStatus.AWAITING_REVIEW, DisputeStatus.RESOLVED -> SubmittedResponseCard(
+                            DisputeStatus.AWAITING_REVIEW,
+                            DisputeStatus.RESOLVED -> RespondedBody(
                                 dispute = dispute,
-                                onViewImages = { viewModel.showImages(dispute.providerResponseImageUrls) },
+                                onViewClaimImages = { viewModel.showImages(dispute.reasonImageUrls) },
+                                onViewResponseImages = { viewModel.showImages(dispute.providerResponseImageUrls) },
                             )
-                        }
-
-                        // "Response received" banner (awaiting review only)
-                        if (dispute.disputeStatus == DisputeStatus.AWAITING_REVIEW) {
-                            ResponseReceivedBanner()
-                        }
-
-                        // Resolution card (resolved only)
-                        if (dispute.disputeStatus == DisputeStatus.RESOLVED) {
-                            ResolutionCard(dispute)
                         }
 
                         Spacer(Modifier.height(16.dp))
@@ -197,18 +139,16 @@ fun DisputeDetailScreen(
 
         SnackbarHost(snackbarHostState, modifier = Modifier.padding(horizontal = 16.dp))
 
-        // ── Bottom action bar ─────────────────────────────────────────────
+        // ── Sticky bottom action bar (only when provider can respond) ──────
         dispute?.let { d ->
-            when (d.disputeStatus) {
-                DisputeStatus.PENDING_RESPONSE -> PendingResponseActionBar(
+            if (d.disputeStatus == DisputeStatus.PENDING_RESPONSE) {
+                PendingResponseActionBar(
                     isSubmitting = state.isSubmitting,
                     isUploading  = state.isUploading,
                     canSubmit    = state.canSubmit,
                     onSaveDraft  = viewModel::saveDraft,
                     onSubmit     = { showSubmitConfirm = true },
                 )
-                DisputeStatus.AWAITING_REVIEW -> AwaitingReviewActionBar()
-                DisputeStatus.RESOLVED        -> { /* no action bar for resolved */ }
             }
         }
     }
@@ -245,273 +185,248 @@ fun DisputeDetailScreen(
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Shared section header
-// ────────────────────────────────────────────────────────────────────────────
-
+// ──────────────────────────────────────────────────────────────────────────
+// Top bar
+// ──────────────────────────────────────────────────────────────────────────
 @Composable
-private fun SectionHeader(n: String, title: String) {
-    Row(
-        Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(
-            Modifier.size(20.dp).clip(CircleShape).background(C.Blue),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(n, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-        }
-        Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = C.Ink, letterSpacing = (-0.1).sp)
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Section 1 — Service information
-// ────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun ServiceInfoCard(dispute: Dispute) {
-    Column(
-        Modifier
-            .padding(horizontal = 20.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.White)
-            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
-            .padding(horizontal = 14.dp),
-    ) {
-        InfoRow(label = "Service",      value = dispute.serviceName ?: "—")
-        InfoRow(label = "Date & time",  value = dispute.scheduledAt?.let { formatDisputeDate(it) } ?: "—")
-        InfoRow(label = "Customer",     value = dispute.customerName ?: "—")
-        InfoRow(label = "Booking ref",  value = "#${dispute.bookingId.takeLast(8).uppercase()}", last = true)
-    }
-}
-
-@Composable
-private fun InfoRow(label: String, value: String, last: Boolean = false) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp)
-            .then(if (!last) Modifier.border(
-                width = 1.dp,
-                color = C.Line,
-                shape = RoundedCornerShape(0.dp),
-            ) else Modifier),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, fontSize = 12.sp, color = C.Slate)
-        Text(value, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
-    }
-    if (!last) Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line))
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Section 2 — Customer's claim
-// ────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun CustomerClaimCard(dispute: Dispute, onViewImages: () -> Unit) {
-    Column(
-        Modifier
-            .padding(horizontal = 20.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.White)
-            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
-            .padding(14.dp),
-    ) {
-        // Customer header row
+private fun DspDetailTopBar(disputeId: String?, onBack: () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(C.Bg)) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            val name = dispute.customerName ?: "Customer"
-            Avatar(
-                initials = initialsFor(name),
-                color    = Color(avatarColorFor(dispute.raisedBy)),
-                size     = 32,
-                fontSize = 11,
-                photoUrl = dispute.customerPhotoUrl,
-            )
-            Column(Modifier.weight(1f)) {
-                Text(name, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = C.Ink)
-                Text(
-                    "Raised ${formatDisputeDate(dispute.createdAt)}",
-                    fontSize = 10.5.sp,
-                    color = C.Mute,
-                )
-            }
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(RedSoft)
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
-            ) {
-                Text(
-                    "CUSTOMER'S CLAIM",
-                    fontSize = 9.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = RedText,
-                    letterSpacing = 0.4.sp,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        // Reason block
-        Column(
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(RedFill)
-                .border(
-                    width = 3.dp,
-                    color = RedBorder.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 10.dp, bottomEnd = 10.dp),
-                )
-                .padding(10.dp, 10.dp, 10.dp, 10.dp),
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            // Left-border effect via inner padding
-            Row {
-                Box(
-                    Modifier
-                        .width(3.dp)
-                        .fillMaxHeight()
-                        .background(RedText, RoundedCornerShape(2.dp))
-                )
-                Column(Modifier.padding(start = 10.dp)) {
-                    Text(
-                        "Reason: ${dispute.reason}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = RedDark,
-                    )
-                }
-            }
-        }
-
-        // Simpler approach for the red left-border block:
-        // (The above Box-within-Row is a bit complex; let me simplify it inline)
-        Spacer(Modifier.height(10.dp))
-
-        // Photos count pill (tappable)
-        val imgCount = dispute.reasonImageUrls.size
-        if (imgCount > 0) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
                     .background(C.Subtle)
-                    .clickable { onViewImages() }
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    .clickable { onBack() },
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Image, null, tint = C.Slate, modifier = Modifier.size(14.dp))
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = null,
+                    tint = C.Ink,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "$imgCount ${if (imgCount == 1) "photo" else "photos"} attached · tap to view",
-                    fontSize = 11.5.sp,
+                    text = disputeId
+                        ?.let { "Dispute #${it.takeLast(8).uppercase()}" }
+                        ?: "Dispute",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = C.Ink,
+                    letterSpacing = (-0.2).sp,
+                )
+                Text(
+                    "Filed by customer · Fixit team reviewing",
+                    fontSize = 12.sp,
                     color = C.Slate,
                 )
             }
+            // Overflow indicator (placeholder for future actions menu)
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(C.Subtle),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.MoreVert,
+                    contentDescription = null,
+                    tint = C.Slate,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
+        HorizontalDivider(color = C.Line)
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Section 3a — Pending response form (editable)
-// ────────────────────────────────────────────────────────────────────────────
-
+// ──────────────────────────────────────────────────────────────────────────
+// State A — PENDING_RESPONSE body
+// ──────────────────────────────────────────────────────────────────────────
 @Composable
-private fun PendingResponseForm(
+private fun PendingBody(
+    dispute: Dispute,
     state: DisputeDetailState,
     onTextChange: (String) -> Unit,
     onAttachImages: () -> Unit,
     onRemoveImage: (String) -> Unit,
+    onViewClaimImages: () -> Unit,
     onViewUploadedImages: () -> Unit,
 ) {
-    Column(Modifier.padding(horizontal = 20.dp)) {
-        // Warning banner
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(ReviewSoft)
-                .padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top,
+    // ── Red warning banner ────────────────────────────────────────────────
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(DspRedSoft)
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(DspRed),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Filled.Info,
-                null,
-                tint = ReviewText,
-                modifier = Modifier.size(14.dp).padding(top = 1.dp),
-            )
-            Text(
-                text = "You can only respond once. Be thorough — admin will review both sides before deciding.",
-                fontSize = 11.sp,
-                color = ReviewDark,
-                lineHeight = 16.sp,
+                Icons.Filled.PriorityHigh,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
             )
         }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Respond within 72 hours",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = DspRedText,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = "Dispute filed ${formatDisputeDate(dispute.createdAt)} · ${formatRelativeAgo(dispute.createdAt)}",
+                fontSize = 12.sp,
+                color = DspRedDark,
+                lineHeight = 17.sp,
+            )
+        }
+    }
 
-        Spacer(Modifier.height(10.dp))
+    // ── Booking info card ─────────────────────────────────────────────────
+    DspBookingCard(dispute)
 
-        // Text input with blue focus ring
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.White)
-                .border(1.5.dp, C.Blue, RoundedCornerShape(12.dp))
-                .padding(14.dp),
+    // ── Customer's claim ──────────────────────────────────────────────────
+    DspSectionLabel(
+        "Customer's claim",
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 10.dp),
+    )
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+            .background(C.Bg),
+    ) {
+        // Reason row
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(DspRed),
+            )
+            Text(
+                dispute.reason,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = C.Ink,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        // Optional description (separator + text), if reason is short and
+        // the API ever returns a longer note we still surface the photos.
+        if (dispute.reasonImageUrls.isNotEmpty()) {
+            HorizontalDivider(color = C.Line)
+            // Photo evidence
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    "Evidence photos",
+                    fontSize = 11.sp,
+                    color = C.Mute,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.3.sp,
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
+                EvidencePhotoRow(
+                    urls = dispute.reasonImageUrls,
+                    onClick = onViewClaimImages,
+                )
+            }
+        }
+    }
+
+    // ── Your response (editable) ──────────────────────────────────────────
+    DspSectionLabel(
+        "Your response",
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 10.dp),
+    )
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.5.dp, C.Blue, RoundedCornerShape(14.dp))
+            .background(C.Bg)
+            .padding(14.dp),
+    ) {
+        // The placeholder + BasicTextField overlap pattern keeps the input
+        // editable in-place while showing helper text when empty.
+        Box(Modifier.fillMaxWidth().defaultMinSize(minHeight = 130.dp)) {
             if (state.responseText.isEmpty()) {
                 Text(
-                    "Describe your side of the situation in detail…",
-                    fontSize = 12.5.sp,
+                    "Describe your side of the situation in detail. " +
+                            "Include any facts, dates and evidence that support your response.",
+                    fontSize = 13.sp,
                     color = C.Mute,
-                    lineHeight = 19.sp,
+                    lineHeight = 20.sp,
                 )
             }
             androidx.compose.foundation.text.BasicTextField(
                 value = state.responseText,
                 onValueChange = onTextChange,
                 textStyle = androidx.compose.ui.text.TextStyle(
-                    fontSize = 12.5.sp,
+                    fontSize = 13.sp,
                     color = C.Ink,
-                    lineHeight = 19.sp,
+                    lineHeight = 20.sp,
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
                 ),
-                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 130.dp),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
-
-        // Char count row
+        Spacer(Modifier.height(10.dp))
         Row(
-            Modifier.fillMaxWidth().padding(top = 6.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                "Min 10 characters",
+                text = when {
+                    state.charCount == 0                   -> "Tap to write"
+                    state.charCount < 10                   -> "Min 10 characters"
+                    else                                    -> "Looking good"
+                },
                 fontSize = 11.sp,
-                color = if (state.charCount < 10 && state.charCount > 0) RedText else C.Mute,
+                color = when {
+                    state.charCount == 0     -> C.Blue
+                    state.charCount < 10     -> DspRedText
+                    else                     -> DspGreenDark
+                },
+                fontWeight = FontWeight.Medium,
             )
             Text("${state.charCount}/2000", fontSize = 11.sp, color = C.Mute)
         }
 
-        Spacer(Modifier.height(10.dp))
-
         // Uploaded image thumbnails
         if (state.uploadedImageUrls.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 state.uploadedImageUrls.take(4).forEach { url ->
@@ -526,7 +441,7 @@ private fun PendingResponseForm(
                                 .clickable { onViewUploadedImages() },
                         )
                         Box(
-                            Modifier
+                            modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .offset(x = 4.dp, y = (-4).dp)
                                 .size(16.dp)
@@ -535,13 +450,18 @@ private fun PendingResponseForm(
                                 .clickable { onRemoveImage(url) },
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(Icons.Filled.Close, null, tint = Color.White, modifier = Modifier.size(9.dp))
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(9.dp),
+                            )
                         }
                     }
                 }
                 if (state.uploadedImageUrls.size > 4) {
                     Box(
-                        Modifier
+                        modifier = Modifier
                             .size(60.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(C.Subtle)
@@ -559,207 +479,620 @@ private fun PendingResponseForm(
                 }
             }
         }
+    }
 
-        // Attach photos button
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .border(1.5.dp, if (state.isUploading) C.Blue else C.Line, RoundedCornerShape(20.dp))
-                .clickable(enabled = !state.isUploading) { onAttachImages() }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+    // ── Attach photos CTA ─────────────────────────────────────────────────
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .border(1.5.dp, C.Line, RoundedCornerShape(10.dp))
+            .background(C.Bg)
+            .clickable(enabled = !state.isUploading) { onAttachImages() }
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(C.BlueSoft),
+            contentAlignment = Alignment.Center,
         ) {
             if (state.isUploading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(16.dp),
                     strokeWidth = 2.dp,
                     color = C.Blue,
                 )
-                Spacer(Modifier.width(8.dp))
-                Text("Uploading…", fontSize = 12.5.sp, color = C.Blue, fontWeight = FontWeight.Medium)
             } else {
-                Icon(Icons.Filled.AddPhotoAlternate, null, tint = C.Slate, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    if (state.uploadedImageUrls.isEmpty()) "Attach photos or files (optional)"
-                    else "Add more photos",
-                    fontSize = 12.5.sp,
-                    color = C.Slate,
-                    fontWeight = FontWeight.Medium,
+                Icon(
+                    Icons.Filled.AddPhotoAlternate,
+                    contentDescription = null,
+                    tint = C.Blue,
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                if (state.isUploading) "Uploading…"
+                else if (state.uploadedImageUrls.isEmpty()) "Attach your job photos"
+                else "Add more photos",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = C.Ink,
+            )
+            Text(
+                "Before/after evidence strengthens your case",
+                fontSize = 11.sp,
+                color = C.Mute,
+            )
+        }
+        Text(
+            "+",
+            fontSize = 20.sp,
+            color = C.Blue,
+            fontWeight = FontWeight.Light,
+        )
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Section 3b — Submitted response card (read-only / locked)
-// ────────────────────────────────────────────────────────────────────────────
-
+// ──────────────────────────────────────────────────────────────────────────
+// State B — AWAITING_REVIEW / RESOLVED body
+// ──────────────────────────────────────────────────────────────────────────
 @Composable
-private fun SubmittedResponseCard(dispute: Dispute, onViewImages: () -> Unit) {
-    Column(
-        Modifier
-            .padding(horizontal = 20.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.White)
-            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
-            .padding(14.dp),
-    ) {
-        // Provider header
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Box(
-                Modifier.size(32.dp).clip(CircleShape).background(C.Orange),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("You", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-            Column(Modifier.weight(1f)) {
-                Text("Your response", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = C.Ink)
-                Text(
-                    dispute.providerRespondedAt?.let { "Submitted ${formatDisputeDate(it)}" } ?: "Submitted",
-                    fontSize = 10.5.sp,
-                    color = C.Mute,
-                )
-            }
-            // "Submitted" green chip
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(C.GreenSoft)
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Icon(Icons.Filled.Check, null, tint = Color(0xFF047857), modifier = Modifier.size(9.dp))
-                Text(
-                    "SUBMITTED",
-                    fontSize = 9.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF047857),
-                    letterSpacing = 0.4.sp,
-                )
-            }
-        }
+private fun RespondedBody(
+    dispute: Dispute,
+    onViewClaimImages: () -> Unit,
+    onViewResponseImages: () -> Unit,
+) {
+    val isResolved = dispute.disputeStatus == DisputeStatus.RESOLVED
 
-        Spacer(Modifier.height(10.dp))
-
-        // Response text block (blue left border)
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(C.BlueSoft)
-                .padding(start = 3.dp),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(topEnd = 10.dp, bottomEnd = 10.dp))
-                    .background(C.BlueSoft)
-                    .padding(10.dp),
-            ) {
-                Text(
-                    dispute.providerResponse ?: "—",
-                    fontSize = 12.5.sp,
-                    color = C.Ink,
-                    lineHeight = 19.sp,
-                )
-            }
-        }
-
-        // Photos pill (tappable)
-        val imgCount = dispute.providerResponseImageUrls.size
-        if (imgCount > 0) {
-            Spacer(Modifier.height(10.dp))
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(C.Subtle)
-                    .clickable { onViewImages() }
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(Icons.Filled.Image, null, tint = C.Slate, modifier = Modifier.size(14.dp))
-                Text(
-                    "$imgCount ${if (imgCount == 1) "photo" else "photos"} attached · tap to view",
-                    fontSize = 11.5.sp,
-                    color = C.Slate,
-                )
-            }
-        }
+    // ── Top status banner ─────────────────────────────────────────────────
+    val (bannerBg, bannerAccent, accentText, headerText, subText) = if (isResolved) {
+        Quintuple(
+            C.GreenSoft,
+            DspGreen,
+            DspGreenDark,
+            "Dispute resolved",
+            dispute.resolvedAt
+                ?.let { "Decision issued ${formatDisputeDate(it)}" }
+                ?: "Resolution available",
+        )
+    } else {
+        Quintuple(
+            C.BlueSoft,
+            C.Blue,
+            C.BlueDark,
+            "Under review",
+            dispute.providerRespondedAt?.let {
+                "Response submitted ${formatShortDate(it)} · Decision pending"
+            } ?: "Response submitted · Decision pending",
+        )
     }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// "Response received" confirmation banner (Awaiting Review only)
-// ────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun ResponseReceivedBanner() {
     Row(
-        Modifier
-            .padding(horizontal = 20.dp)
-            .padding(top = 16.dp)
+        modifier = Modifier
+            .padding(horizontal = 20.dp, vertical = 14.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(C.BlueSoft)
-            .border(1.dp, C.Blue.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(bannerBg)
             .padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Box(
-            Modifier.size(36.dp).clip(CircleShape).background(C.Blue),
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(bannerAccent),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Icon(
+                if (isResolved) Icons.Filled.Check else Icons.Filled.Lock,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(16.dp),
+            )
         }
-        Column(Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                "Response received",
-                fontSize = 13.5.sp,
+                headerText,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = C.BlueDark,
+                color = accentText,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                subText,
+                fontSize = 12.sp,
+                color = accentText.copy(alpha = 0.85f),
+                lineHeight = 17.sp,
+            )
+        }
+    }
+
+    // ── Case timeline ─────────────────────────────────────────────────────
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+            .background(C.Bg)
+            .padding(16.dp),
+    ) {
+        Text(
+            "CASE TIMELINE",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = C.Mute,
+            letterSpacing = 0.6.sp,
+            modifier = Modifier.padding(bottom = 14.dp),
+        )
+        DspTimelineStep(
+            label = "Customer filed dispute",
+            date  = formatShortDate(dispute.createdAt),
+            done  = true,
+            isLast = false,
+        )
+        DspTimelineStep(
+            label = "You submitted response",
+            date  = dispute.providerRespondedAt?.let { formatShortDate(it) } ?: "Submitted",
+            done  = true,
+            isLast = false,
+        )
+        DspTimelineStep(
+            label = "Under review by Fixit team",
+            date  = if (isResolved) "Completed" else "In progress",
+            done  = isResolved,
+            active = !isResolved,
+            isLast = false,
+        )
+        DspTimelineStep(
+            label = "Decision & resolution",
+            date  = if (isResolved)
+                dispute.resolvedAt?.let { formatShortDate(it) } ?: "Resolved"
+            else
+                "Pending review",
+            done  = isResolved,
+            isLast = true,
+        )
+    }
+
+    // ── Booking info card ─────────────────────────────────────────────────
+    DspBookingCard(dispute)
+
+    // ── Customer's claim (read-only) ──────────────────────────────────────
+    DspSectionLabel(
+        "Customer's claim",
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 10.dp),
+    )
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+            .background(C.Bg),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(DspRed),
             )
             Text(
-                "Your response has been submitted and is currently under review by our support team. " +
-                        "We will reach out to you directly should any further clarification be required.",
+                dispute.reason,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = C.Ink,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (dispute.reasonImageUrls.isNotEmpty()) {
+            HorizontalDivider(color = C.Line)
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    "Evidence photos",
+                    fontSize = 11.sp,
+                    color = C.Mute,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.3.sp,
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
+                EvidencePhotoRow(
+                    urls = dispute.reasonImageUrls,
+                    onClick = onViewClaimImages,
+                )
+            }
+        }
+    }
+
+    // ── Your response (locked) ────────────────────────────────────────────
+    Row(
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        DspSectionLabel("Your response")
+        Spacer(Modifier.weight(1f))
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(C.GreenSoft)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = null,
+                tint = DspGreenDark,
+                modifier = Modifier.size(11.dp),
+            )
+            Text(
+                dispute.providerRespondedAt
+                    ?.let { "Submitted ${formatShortDate(it)}" }
+                    ?: "Submitted",
+                fontSize = 10.sp,
+                color = DspGreenDark,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth(),
+    ) {
+        // Locked response text box
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+                .background(C.Subtle)
+                .padding(14.dp),
+        ) {
+            Text(
+                dispute.providerResponse ?: "—",
+                fontSize = 13.sp,
+                color = C.Slate,
+                lineHeight = 20.sp,
+            )
+            if (dispute.providerResponseImageUrls.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(C.Bg)
+                        .clickable { onViewResponseImages() }
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Image,
+                        contentDescription = null,
+                        tint = C.Slate,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    val n = dispute.providerResponseImageUrls.size
+                    Text(
+                        "$n ${if (n == 1) "photo" else "photos"} attached · tap to view",
+                        fontSize = 11.5.sp,
+                        color = C.Slate,
+                    )
+                }
+            }
+        }
+        // Lock overlay pill
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xBBFFFFFF))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                Icons.Filled.Lock,
+                contentDescription = null,
+                tint = C.Slate,
+                modifier = Modifier.size(11.dp),
+            )
+            Text(
+                "Locked",
+                fontSize = 10.sp,
+                color = C.Slate,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+
+    // ── Resolution card (RESOLVED only) ───────────────────────────────────
+    if (isResolved) {
+        ResolutionCard(dispute)
+    }
+
+    // ── What happens next notice ──────────────────────────────────────────
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, C.Line, RoundedCornerShape(12.dp))
+            .background(C.Subtle)
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(C.BlueSoft),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Image, // chat-bubble style decoration
+                contentDescription = null,
+                tint = C.Blue,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                if (isResolved) "Need to discuss the outcome?" else "What happens next?",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = C.Ink,
+            )
+            Spacer(Modifier.height(4.dp))
+            val moneyHint = dispute.totalAmount?.let { " (${formatMoney(it)})" } ?: ""
+            Text(
+                if (isResolved) {
+                    "If you have questions about this resolution, our support team is here to help."
+                } else {
+                    "Our support team is reviewing both sides. You'll receive a push notification and " +
+                            "email once a decision is made. Disputed funds$moneyHint are on hold."
+                },
                 fontSize = 12.sp,
-                color = C.BlueDark.copy(alpha = 0.85f),
+                color = C.Slate,
                 lineHeight = 18.sp,
-                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Contact support  →",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = C.Blue,
+                modifier = Modifier.clickable { /* TODO: open support deeplink */ },
             )
         }
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Resolution card (Resolved only)
-// ────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────
+// Shared body components
+// ──────────────────────────────────────────────────────────────────────────
 
+@Composable
+private fun DspBookingCard(dispute: Dispute) {
+    val name = dispute.customerName ?: "Customer"
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+            .background(C.Bg)
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Avatar(
+            initials = initialsFor(name),
+            color    = Color(avatarColorFor(dispute.raisedBy)),
+            size     = 44,
+            fontSize = 14,
+            photoUrl = dispute.customerPhotoUrl,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = C.Ink)
+            Text(
+                text = buildString {
+                    append(dispute.serviceName ?: "Service")
+                    dispute.scheduledAt?.let { append(" · ${formatDisputeDate(it)}") }
+                },
+                fontSize = 12.sp,
+                color = C.Slate,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Text(
+                "#${dispute.bookingId.takeLast(8).uppercase()}",
+                fontSize = 11.sp,
+                color = C.Mute,
+                modifier = Modifier.padding(top = 1.dp),
+            )
+        }
+        Text(
+            dispute.totalAmount?.let { formatMoney(it) } ?: "—",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = C.Orange,
+        )
+    }
+}
+
+@Composable
+private fun DspSectionLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text.uppercase(),
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        color = C.Slate,
+        letterSpacing = 0.5.sp,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun EvidencePhotoRow(urls: List<String>, onClick: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val visible = urls.take(3)
+        visible.forEach { url ->
+            Box(
+                modifier = Modifier
+                    .width(88.dp)
+                    .height(72.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(C.Subtle)
+                    .border(1.dp, C.Line, RoundedCornerShape(10.dp))
+                    .clickable { onClick() },
+            ) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
+                )
+            }
+        }
+        if (urls.size > 3) {
+            Box(
+                modifier = Modifier
+                    .width(88.dp)
+                    .height(72.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(C.Subtle)
+                    .border(1.dp, C.Line, RoundedCornerShape(10.dp))
+                    .clickable { onClick() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "+${urls.size - 3}",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = C.Slate,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DspTimelineStep(
+    label: String,
+    date: String,
+    done: Boolean = false,
+    active: Boolean = false,
+    isLast: Boolean,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        // Dot + connector line
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when {
+                            done   -> C.Blue
+                            active -> C.Blue
+                            else   -> C.Bg
+                        }
+                    )
+                    .border(
+                        2.dp,
+                        if (done || active) C.Blue else C.Line,
+                        CircleShape,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    done -> Icon(
+                        Icons.Filled.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    active -> Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color.White),
+                    )
+                    else -> Unit
+                }
+            }
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .height(28.dp)
+                        .background(if (done) C.Blue else C.Line),
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .padding(bottom = if (isLast) 0.dp else 16.dp),
+        ) {
+            Text(
+                label,
+                fontSize = 13.sp,
+                fontWeight = if (done || active) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (done || active) C.Ink else C.Mute,
+            )
+            Text(
+                date,
+                fontSize = 11.sp,
+                color = if (active) C.Blue else C.Mute,
+                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Resolution card (RESOLVED state)
+// ──────────────────────────────────────────────────────────────────────────
 @Composable
 private fun ResolutionCard(dispute: Dispute) {
     Column(
-        Modifier
-            .padding(horizontal = 20.dp)
-            .padding(top = 16.dp)
+        modifier = Modifier
+            .padding(horizontal = 20.dp, vertical = 14.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(C.GreenSoft)
-            .border(1.dp, Color(0xFF047857).copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+            .border(1.dp, DspGreenDark.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("Resolution", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF047857))
+        Text(
+            "Resolution",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = DspGreenDark,
+        )
         val resolutionLabel = when (dispute.resolution) {
             "release" -> "Full payment released to you"
             "refund"  -> "Full refund issued to customer"
@@ -768,20 +1101,25 @@ private fun ResolutionCard(dispute: Dispute) {
         }
         Text(resolutionLabel, fontSize = 12.5.sp, color = Color(0xFF065F46))
         dispute.resolutionNote?.let {
-            Text(it, fontSize = 12.sp, color = Color(0xFF047857).copy(alpha = 0.8f), lineHeight = 18.sp)
+            Text(
+                it,
+                fontSize = 12.sp,
+                color = DspGreenDark.copy(alpha = 0.8f),
+                lineHeight = 18.sp,
+            )
         }
         if (dispute.resolution == "partial" || dispute.resolution == "release") {
             dispute.providerPayout?.let { payout ->
                 Row(
-                    Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text("Your payout", fontSize = 12.sp, color = Color(0xFF065F46))
                     Text(
-                        "SGD ${payout.toPlainString()}",
+                        formatMoney(payout),
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF047857),
+                        color = DspGreenDark,
                     )
                 }
             }
@@ -789,10 +1127,9 @@ private fun ResolutionCard(dispute: Dispute) {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Action bars
-// ────────────────────────────────────────────────────────────────────────────
-
+// ──────────────────────────────────────────────────────────────────────────
+// Sticky bottom bar — only shown for PENDING_RESPONSE
+// ──────────────────────────────────────────────────────────────────────────
 @Composable
 private fun PendingResponseActionBar(
     isSubmitting: Boolean,
@@ -801,61 +1138,55 @@ private fun PendingResponseActionBar(
     onSaveDraft: () -> Unit,
     onSubmit: () -> Unit,
 ) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .border(width = 1.dp, color = C.Line, shape = androidx.compose.ui.graphics.RectangleShape)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Save draft
-        Box(
-            Modifier
-                .weight(1f)
-                .height(50.dp)
-                .clip(RoundedCornerShape(25.dp))
-                .background(Color.White)
-                .border(1.5.dp, C.Line, RoundedCornerShape(25.dp))
-                .clickable(enabled = !isSubmitting) { onSaveDraft() },
-            contentAlignment = Alignment.Center,
+    Column(modifier = Modifier.fillMaxWidth().background(C.Bg)) {
+        HorizontalDivider(color = C.Line)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(bottom = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Save draft", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.Slate)
-        }
-
-        // Submit response
-        Box(
-            Modifier
-                .weight(1.6f)
-                .height(50.dp)
-                .clip(RoundedCornerShape(25.dp))
-                .background(if (canSubmit) C.Blue else C.Mute)
-                .clickable(enabled = canSubmit && !isSubmitting && !isUploading) { onSubmit() },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (isSubmitting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.5.dp,
-                    color = Color.White,
+            // Save draft
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(25.dp))
+                    .border(1.5.dp, C.Line, RoundedCornerShape(25.dp))
+                    .background(C.Bg)
+                    .clickable(enabled = !isSubmitting) { onSaveDraft() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "Save draft",
+                    color = C.Slate,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
                 )
-            } else {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Submit response",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
+            }
+            // Submit response
+            Box(
+                modifier = Modifier
+                    .weight(1.5f)
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(25.dp))
+                    .background(if (canSubmit) DspRed else C.Mute)
+                    .clickable(enabled = canSubmit && !isSubmitting && !isUploading) { onSubmit() },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.5.dp,
                         color = Color.White,
                     )
-                    Icon(
-                        Icons.AutoMirrored.Filled.Send,
-                        null,
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp),
+                } else {
+                    Text(
+                        "Submit response",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
@@ -863,40 +1194,9 @@ private fun PendingResponseActionBar(
     }
 }
 
-@Composable
-private fun AwaitingReviewActionBar() {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .border(width = 1.dp, color = C.Line, shape = androidx.compose.ui.graphics.RectangleShape)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-                .clip(RoundedCornerShape(25.dp))
-                .background(Color.White)
-                .border(1.5.dp, C.Line, RoundedCornerShape(25.dp))
-                .clickable { /* TODO: open support channel / email deeplink */ },
-            contentAlignment = Alignment.Center,
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.HelpOutline, null, tint = C.Ink, modifier = Modifier.size(15.dp))
-                Text("Contact support", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
-            }
-        }
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────
 // Full-screen image viewer dialog
-// ────────────────────────────────────────────────────────────────────────────
-
+// ──────────────────────────────────────────────────────────────────────────
 @Composable
 private fun ImageViewerDialog(urls: List<String>, onDismiss: () -> Unit) {
     var currentIndex by remember { mutableStateOf(0) }
@@ -906,12 +1206,11 @@ private fun ImageViewerDialog(urls: List<String>, onDismiss: () -> Unit) {
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Box(
-            Modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.92f))
                 .clickable { onDismiss() },
         ) {
-            // Current image
             AsyncImage(
                 model = urls.getOrNull(currentIndex),
                 contentDescription = null,
@@ -920,12 +1219,10 @@ private fun ImageViewerDialog(urls: List<String>, onDismiss: () -> Unit) {
                     .fillMaxWidth()
                     .align(Alignment.Center)
                     .padding(horizontal = 16.dp)
-                    .clickable { /* consume tap so it doesn't dismiss */ },
+                    .clickable { /* consume tap */ },
             )
-
-            // Close button
             Box(
-                Modifier
+                modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(20.dp)
                     .size(36.dp)
@@ -934,13 +1231,16 @@ private fun ImageViewerDialog(urls: List<String>, onDismiss: () -> Unit) {
                     .clickable { onDismiss() },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Close, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp),
+                )
             }
-
-            // Counter + prev/next (only when multiple images)
             if (urls.size > 1) {
                 Column(
-                    Modifier
+                    modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -955,7 +1255,7 @@ private fun ImageViewerDialog(urls: List<String>, onDismiss: () -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         if (currentIndex > 0) {
                             Box(
-                                Modifier
+                                modifier = Modifier
                                     .size(40.dp)
                                     .clip(CircleShape)
                                     .background(Color.White.copy(alpha = 0.15f))
@@ -967,7 +1267,7 @@ private fun ImageViewerDialog(urls: List<String>, onDismiss: () -> Unit) {
                         }
                         if (currentIndex < urls.size - 1) {
                             Box(
-                                Modifier
+                                modifier = Modifier
                                     .size(40.dp)
                                     .clip(CircleShape)
                                     .background(Color.White.copy(alpha = 0.15f))
@@ -984,12 +1284,31 @@ private fun ImageViewerDialog(urls: List<String>, onDismiss: () -> Unit) {
     }
 }
 
-// ── Shared date helper (also used in DisputeListScreen) ───────────────────
+// ──────────────────────────────────────────────────────────────────────────
+// Date helpers (also used by DisputeListScreen via internal visibility)
+// ──────────────────────────────────────────────────────────────────────────
 
-internal fun formatDisputeDate(instant: kotlin.time.Instant): String = runCatching {
+/** "Apr 19, 2026 · 1:00 PM" — long form. */
+internal fun formatDisputeDate(instant: Instant): String = runCatching {
     val javaInstant = java.time.Instant.ofEpochMilli(instant.toEpochMilliseconds())
     val zdt = javaInstant.atZone(java.time.ZoneId.systemDefault())
     java.time.format.DateTimeFormatter
         .ofPattern("MMM d, yyyy · h:mm a", java.util.Locale.ENGLISH)
         .format(zdt)
 }.getOrElse { "—" }
+
+/** "Apr 19" — short form used by the timeline. */
+internal fun formatShortDate(instant: Instant): String = runCatching {
+    val javaInstant = java.time.Instant.ofEpochMilli(instant.toEpochMilliseconds())
+    val zdt = javaInstant.atZone(java.time.ZoneId.systemDefault())
+    java.time.format.DateTimeFormatter
+        .ofPattern("MMM d", java.util.Locale.ENGLISH)
+        .format(zdt)
+}.getOrElse { "—" }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Tiny tuple helper (Kotlin only ships Pair/Triple by default)
+// ──────────────────────────────────────────────────────────────────────────
+private data class Quintuple<A, B, C, D, E>(
+    val first: A, val second: B, val third: C, val fourth: D, val fifth: E,
+)
