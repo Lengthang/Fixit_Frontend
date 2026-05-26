@@ -26,6 +26,8 @@ import com.fixit.app.ui.provider.earnings.ProviderEarningsScreen
 import com.fixit.app.ui.provider.jobs.JobDetailScreen
 import com.fixit.app.ui.provider.jobs.ProviderJobsScreen
 import com.fixit.app.ui.provider.messages.ProviderMessagesScreen
+import com.fixit.app.ui.provider.payment.PaymentPayoutsScreen
+import com.fixit.app.ui.provider.payment.WithdrawConfirmScreen
 import com.fixit.app.ui.provider.profile.ProviderProfileScreen
 import com.fixit.app.ui.provider.profile.ProviderProfileViewModel
 import com.fixit.app.ui.provider.reviews.ProviderReviewsScreen
@@ -57,10 +59,6 @@ private fun describe(e: Throwable): String = when (e) {
     else -> e.message ?: e.javaClass.simpleName
 }
 
-/**
- * Navigates between provider tabs without stacking entries. Tapping the same
- * tab twice doesn't push a duplicate; back from any tab pops to PROVIDER_HOME.
- */
 private fun NavHostController.switchProviderTab(tabId: String) {
     navigate(Routes.providerTab(tabId)) {
         launchSingleTop = true
@@ -71,7 +69,7 @@ private fun NavHostController.switchProviderTab(tabId: String) {
 
 @Composable
 fun FixItNavGraph(startDestination: String) {
-    val nav = rememberNavController()
+    val nav   = rememberNavController()
     val scope = rememberCoroutineScope()
     val devAuth: DevAuthHandler = hiltViewModel<DevAuthBridge>().handler
 
@@ -111,29 +109,29 @@ fun FixItNavGraph(startDestination: String) {
         }
 
         composable(Routes.PHONE) { entry ->
-            val owner = remember(entry) { nav.getBackStackEntry(Routes.WELCOME) }
+            val owner  = remember(entry) { nav.getBackStackEntry(Routes.WELCOME) }
             val draftVm: SignupDraftViewModel = hiltViewModel(owner)
             PhoneEntryScreen(
-                onBack = { nav.popBackStack() },
+                onBack     = { nav.popBackStack() },
                 onCodeSent = { phone -> nav.navigate(Routes.otp(phone)) },
-                draftVm = draftVm,
+                draftVm    = draftVm,
             )
         }
 
         composable(
             Routes.OTP,
             arguments = listOf(navArgument("phone") {
-                type = NavType.StringType
+                type     = NavType.StringType
                 nullable = false
             }),
         ) { entry ->
-            val phone = entry.arguments?.getString("phone").orEmpty()
-            val owner = remember(entry) { nav.getBackStackEntry(Routes.WELCOME) }
+            val phone  = entry.arguments?.getString("phone").orEmpty()
+            val owner  = remember(entry) { nav.getBackStackEntry(Routes.WELCOME) }
             val draftVm: SignupDraftViewModel = hiltViewModel(owner)
             OtpScreen(
-                phone = phone,
-                onBack = { nav.popBackStack() },
-                onVerifiedNew = {
+                phone            = phone,
+                onBack           = { nav.popBackStack() },
+                onVerifiedNew    = {
                     nav.navigate(Routes.SIGNUP_GRAPH) {
                         popUpTo(Routes.WELCOME) { inclusive = true }
                     }
@@ -148,27 +146,23 @@ fun FixItNavGraph(startDestination: String) {
             )
         }
 
-        // ── Signup sub-graph ──
+        // ── Signup sub-graph ──────────────────────────────────────────────────
         navigation(startDestination = Routes.ABOUT_YOU, route = Routes.SIGNUP_GRAPH) {
 
             composable(Routes.ABOUT_YOU) { entry ->
                 val parent = remember(entry) { nav.getBackStackEntry(Routes.SIGNUP_GRAPH) }
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
-                AboutYouScreen(
-                    onBack = { nav.popBackStack() },
-                    onContinue = { nav.navigate(Routes.ROLE) },
-                    draftVm = draftVm,
-                )
+                AboutYouScreen(onBack = { nav.popBackStack() }, onContinue = { nav.navigate(Routes.ROLE) }, draftVm = draftVm)
             }
 
             composable(Routes.ROLE) { entry ->
                 val parent = remember(entry) { nav.getBackStackEntry(Routes.SIGNUP_GRAPH) }
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
                 RoleScreen(
-                    onBack = { nav.popBackStack() },
-                    onContinueCustomer = { nav.navigate(Routes.LOCATION) },
-                    onContinueProvider = { nav.navigate(Routes.LOCATION) },
-                    draftVm = draftVm,
+                    onBack               = { nav.popBackStack() },
+                    onContinueCustomer   = { nav.navigate(Routes.LOCATION) },
+                    onContinueProvider   = { nav.navigate(Routes.LOCATION) },
+                    draftVm              = draftVm,
                 )
             }
 
@@ -176,7 +170,7 @@ fun FixItNavGraph(startDestination: String) {
                 val parent = remember(entry) { nav.getBackStackEntry(Routes.SIGNUP_GRAPH) }
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
                 LocationScreen(
-                    onBack = { nav.popBackStack() },
+                    onBack     = { nav.popBackStack() },
                     onContinue = {
                         if (draftVm.state.value.role == UserRole.PROVIDER) {
                             nav.navigate(Routes.PROV_SERVICE_AREA)
@@ -189,7 +183,7 @@ fun FixItNavGraph(startDestination: String) {
 
             composable(Routes.PROMO) {
                 PromoScreen(
-                    onBack = { nav.popBackStack() },
+                    onBack   = { nav.popBackStack() },
                     onFinish = {
                         nav.navigate(Routes.home(UserRole.CUSTOMER)) {
                             popUpTo(Routes.WELCOME) { inclusive = true }
@@ -201,45 +195,37 @@ fun FixItNavGraph(startDestination: String) {
             composable(Routes.PROV_SERVICE_AREA) { entry ->
                 val parent = remember(entry) { nav.getBackStackEntry(Routes.SIGNUP_GRAPH) }
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
-                ServiceAreaScreen(
-                    onBack = { nav.popBackStack() },
-                    onContinue = { nav.navigate(Routes.PROV_SERVICES) },
-                    draftVm = draftVm,
-                )
+                ServiceAreaScreen(onBack = { nav.popBackStack() }, onContinue = { nav.navigate(Routes.PROV_SERVICES) }, draftVm = draftVm)
             }
+
             composable(Routes.PROV_SERVICES) { entry ->
                 val parent = remember(entry) { nav.getBackStackEntry(Routes.SIGNUP_GRAPH) }
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
-                ServicesScreen(
-                    onBack = { nav.popBackStack() },
-                    onContinue = { nav.navigate(Routes.PROV_SCHEDULE) },
-                    draftVm = draftVm,
-                )
+                ServicesScreen(onBack = { nav.popBackStack() }, onContinue = { nav.navigate(Routes.PROV_SCHEDULE) }, draftVm = draftVm)
             }
+
             composable(Routes.PROV_SCHEDULE) { entry ->
                 val parent = remember(entry) { nav.getBackStackEntry(Routes.SIGNUP_GRAPH) }
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
-                ScheduleScreen(
-                    onBack = { nav.popBackStack() },
-                    onContinue = { nav.navigate(Routes.PROV_CERTIFICATE) },
-                    draftVm = draftVm,
-                )
+                ScheduleScreen(onBack = { nav.popBackStack() }, onContinue = { nav.navigate(Routes.PROV_CERTIFICATE) }, draftVm = draftVm)
             }
+
             composable(Routes.PROV_CERTIFICATE) { entry ->
                 val parent = remember(entry) { nav.getBackStackEntry(Routes.SIGNUP_GRAPH) }
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
                 CertificateScreen(
-                    onBack = { nav.popBackStack() },
+                    onBack     = { nav.popBackStack() },
                     onContinue = { nav.navigate(Routes.PROV_PAYMENT) },
-                    onSkip = { nav.navigate(Routes.PROV_PAYMENT) },
-                    draftVm = draftVm,
+                    onSkip     = { nav.navigate(Routes.PROV_PAYMENT) },
+                    draftVm    = draftVm,
                 )
             }
+
             composable(Routes.PROV_PAYMENT) { entry ->
                 val parent = remember(entry) { nav.getBackStackEntry(Routes.SIGNUP_GRAPH) }
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
                 PaymentScreen(
-                    onBack = { nav.popBackStack() },
+                    onBack       = { nav.popBackStack() },
                     onRegistered = {
                         nav.navigate(Routes.PROV_RECEIVED) {
                             popUpTo(Routes.PROV_SERVICE_AREA) { inclusive = true }
@@ -248,6 +234,7 @@ fun FixItNavGraph(startDestination: String) {
                     draftVm = draftVm,
                 )
             }
+
             composable(Routes.PROV_RECEIVED) { entry ->
                 val parent = remember(entry) { nav.getBackStackEntry(Routes.SIGNUP_GRAPH) }
                 val draftVm: SignupDraftViewModel = hiltViewModel(parent)
@@ -262,37 +249,37 @@ fun FixItNavGraph(startDestination: String) {
             }
         }
 
-        // ── Provider tabs ──
+        // ── Provider tabs ─────────────────────────────────────────────────────
 
         composable(Routes.PROVIDER_HOME) {
             ProviderHomeScreen(
-                onTabClick = { nav.switchProviderTab(it) },
-                onNewRequestClick = { req -> nav.navigate(Routes.jobDetail(req.id)) },
-                onUpcomingClick = { up -> nav.navigate(Routes.jobDetail(up.id)) },
-                onWithdrawClick = { nav.navigate(Routes.PROVIDER_EARNINGS) },
+                onTabClick          = { nav.switchProviderTab(it) },
+                onNewRequestClick   = { req -> nav.navigate(Routes.jobDetail(req.id)) },
+                onUpcomingClick     = { up -> nav.navigate(Routes.jobDetail(up.id)) },
+                onWithdrawClick     = { nav.navigate(Routes.PROVIDER_EARNINGS) },
                 onNotificationsClick = { /* TODO: notifications screen */ },
-                onSeeAllRequests = { nav.switchProviderTab("jobs") },
-                onSeeAllUpcoming = { nav.switchProviderTab("calendar") },
+                onSeeAllRequests    = { nav.switchProviderTab("jobs") },
+                onSeeAllUpcoming    = { nav.switchProviderTab("calendar") },
             )
         }
 
         composable(Routes.PROVIDER_JOBS) {
             ProviderJobsScreen(
-                onTabClick = { nav.switchProviderTab(it) },
-                onJobClick = { bookingId -> nav.navigate(Routes.jobDetail(bookingId)) },
+                onTabClick  = { nav.switchProviderTab(it) },
+                onJobClick  = { bookingId -> nav.navigate(Routes.jobDetail(bookingId)) },
             )
         }
 
         composable(Routes.PROVIDER_CALENDAR) {
             ProviderCalendarScreen(
-                onTabClick = { nav.switchProviderTab(it) },
-                onJobClick = { bookingId -> nav.navigate(Routes.jobDetail(bookingId)) },
+                onTabClick  = { nav.switchProviderTab(it) },
+                onJobClick  = { bookingId -> nav.navigate(Routes.jobDetail(bookingId)) },
             )
         }
 
         composable(Routes.PROVIDER_MESSAGES) {
             ProviderMessagesScreen(
-                onTabClick = { nav.switchProviderTab(it) },
+                onTabClick    = { nav.switchProviderTab(it) },
                 onMessageClick = { },
             )
         }
@@ -301,67 +288,76 @@ fun FixItNavGraph(startDestination: String) {
             val vm: ProviderProfileViewModel = hiltViewModel()
             val signedOut by vm.signedOut.collectAsState()
             LaunchedEffect(signedOut) {
-                if (signedOut) {
-                    nav.navigate(Routes.WELCOME) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
+                if (signedOut) nav.navigate(Routes.WELCOME) { popUpTo(0) { inclusive = true } }
             }
             ProviderProfileScreen(
-                onTabClick = { nav.switchProviderTab(it) },
-                onEditProfile = { /* TODO: edit profile screen */ },
+                onTabClick         = { nav.switchProviderTab(it) },
+                onEditProfile      = { /* TODO: edit profile screen */ },
                 onServicesAndRates = { nav.navigate(Routes.PROVIDER_SERVICES) },
-                onPaymentAndPayouts = { nav.navigate(Routes.PROVIDER_EARNINGS) },
-                onReviews = { nav.navigate(Routes.PROVIDER_REVIEWS) },
-                onHelp = { /* TODO: help & support */ },
-                viewModel = vm,
+                // ── Updated: now goes to the new Payment & Payouts hub ──
+                onPaymentAndPayouts = { nav.navigate(Routes.PROVIDER_PAYMENT_PAYOUTS) },
+                onReviews          = { nav.navigate(Routes.PROVIDER_REVIEWS) },
+                onHelp             = { /* TODO: help & support */ },
+                viewModel          = vm,
             )
         }
 
-        // ── Provider sub-screens ──
+        // ── Provider sub-screens ──────────────────────────────────────────────
 
+        // Earnings (entry from Home → Withdraw button — stays as before)
         composable(Routes.PROVIDER_EARNINGS) {
             ProviderEarningsScreen(
+                onBack                     = { nav.popBackStack() },
+                onTabClick                 = { nav.switchProviderTab(it) },
+                onNavigateToWithdrawConfirm = { nav.navigate(Routes.PROVIDER_WITHDRAW_CONFIRM) },
+            )
+        }
+
+        // Payment & Payouts hub (entry from Profile → Payment & Payouts)
+        composable(Routes.PROVIDER_PAYMENT_PAYOUTS) {
+            PaymentPayoutsScreen(
+                onBack                     = { nav.popBackStack() },
+                onTabClick                 = { nav.switchProviderTab(it) },
+                onNavigateToWithdrawConfirm = { nav.navigate(Routes.PROVIDER_WITHDRAW_CONFIRM) },
+                onSeeAllHistory            = { nav.navigate(Routes.PROVIDER_EARNINGS) },
+            )
+        }
+
+        // Withdraw confirm (reached from either screen when a default method exists)
+        composable(Routes.PROVIDER_WITHDRAW_CONFIRM) {
+            WithdrawConfirmScreen(
                 onBack = { nav.popBackStack() },
-                onTabClick = { nav.switchProviderTab(it) },
-                onWithdraw = { /* TODO: withdrawal flow */ },
             )
         }
 
         composable(Routes.PROVIDER_REVIEWS) {
             ProviderReviewsScreen(
-                onBack = { nav.popBackStack() },
+                onBack     = { nav.popBackStack() },
                 onTabClick = { nav.switchProviderTab(it) },
             )
         }
 
-        // ── Provider services sub-screens ──
+        // ── Provider services sub-screens ─────────────────────────────────────
 
         composable(Routes.PROVIDER_SERVICES) {
             MyServicesScreen(
-                onBack = { nav.popBackStack() },
+                onBack        = { nav.popBackStack() },
                 onServiceClick = { id -> nav.navigate(Routes.providerServiceDetail(id)) },
-                onNewService = { nav.navigate(Routes.PROVIDER_SERVICE_NEW) },
-                onTabClick = { nav.switchProviderTab(it) },
+                onNewService  = { nav.navigate(Routes.PROVIDER_SERVICE_NEW) },
+                onTabClick    = { nav.switchProviderTab(it) },
             )
         }
 
         composable(Routes.PROVIDER_SERVICE_NEW) {
             AddEditServiceScreen(
-                onBack = { nav.popBackStack() },
-                onSaved = {
-                    // Pop back to the services list, refreshing it.
-                    nav.popBackStack(Routes.PROVIDER_SERVICES, inclusive = false)
-                },
+                onBack  = { nav.popBackStack() },
+                onSaved = { nav.popBackStack(Routes.PROVIDER_SERVICES, inclusive = false) },
             )
         }
 
         composable(
             Routes.PROVIDER_SERVICE_DETAIL,
-            arguments = listOf(navArgument("serviceId") {
-                type = NavType.StringType
-                nullable = false
-            }),
+            arguments = listOf(navArgument("serviceId") { type = NavType.StringType; nullable = false }),
         ) {
             ServiceDetailScreen(
                 onBack = { nav.popBackStack() },
@@ -371,30 +367,20 @@ fun FixItNavGraph(startDestination: String) {
 
         composable(
             Routes.PROVIDER_SERVICE_EDIT,
-            arguments = listOf(navArgument("serviceId") {
-                type = NavType.StringType
-                nullable = false
-            }),
+            arguments = listOf(navArgument("serviceId") { type = NavType.StringType; nullable = false }),
         ) {
             AddEditServiceScreen(
-                onBack = { nav.popBackStack() },
-                onSaved = {
-                    // Pop both the edit screen AND the stale detail screen,
-                    // landing back on the services list.
-                    nav.popBackStack(Routes.PROVIDER_SERVICES, inclusive = false)
-                },
+                onBack  = { nav.popBackStack() },
+                onSaved = { nav.popBackStack(Routes.PROVIDER_SERVICES, inclusive = false) },
             )
         }
 
         composable(
             Routes.JOB_DETAIL,
-            arguments = listOf(navArgument("bookingId") {
-                type = NavType.StringType
-                nullable = false
-            }),
+            arguments = listOf(navArgument("bookingId") { type = NavType.StringType; nullable = false }),
         ) {
             JobDetailScreen(
-                onBack = { nav.popBackStack() },
+                onBack           = { nav.popBackStack() },
                 onActionCompleted = { nav.popBackStack() },
             )
         }
@@ -405,11 +391,9 @@ fun FixItNavGraph(startDestination: String) {
         ) { entry ->
             val role = UserRole.from(entry.arguments?.getString("role"))
             UserPlaceholderScreen(
-                role = role,
+                role      = role,
                 onSignedOut = {
-                    nav.navigate(Routes.WELCOME) {
-                        popUpTo(0) { inclusive = true }
-                    }
+                    nav.navigate(Routes.WELCOME) { popUpTo(0) { inclusive = true } }
                 },
             )
         }

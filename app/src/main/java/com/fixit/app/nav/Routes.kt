@@ -29,18 +29,16 @@ object Routes {
     const val PROVIDER_PROFILE   = "provider/profile"
 
     // ── Provider sub-screens (off-tab) ──
-    const val PROVIDER_EARNINGS  = "provider/earnings"
-    const val PROVIDER_REVIEWS   = "provider/reviews"
+    const val PROVIDER_EARNINGS        = "provider/earnings"
+    const val PROVIDER_REVIEWS         = "provider/reviews"
+    const val PROVIDER_PAYMENT_PAYOUTS = "provider/payment_payouts"
+    const val PROVIDER_WITHDRAW_CONFIRM = "provider/withdraw_confirm"
 
     // ── Provider services sub-screens ──
-    /** List of the signed-in provider's own services. */
-    const val PROVIDER_SERVICES = "provider/services"
-    /** Add a brand-new service. */
-    const val PROVIDER_SERVICE_NEW = "provider/service_new"
-    /** Service detail — serviceId is a required nav arg. */
-    const val PROVIDER_SERVICE_DETAIL = "provider/service/{serviceId}"
-    /** Edit an existing service — serviceId is a required nav arg. */
-    const val PROVIDER_SERVICE_EDIT = "provider/service/{serviceId}/edit"
+    const val PROVIDER_SERVICES        = "provider/services"
+    const val PROVIDER_SERVICE_NEW     = "provider/service_new"
+    const val PROVIDER_SERVICE_DETAIL  = "provider/service/{serviceId}"
+    const val PROVIDER_SERVICE_EDIT    = "provider/service/{serviceId}/edit"
 
     fun providerServiceDetail(id: String) = "provider/service/$id"
     fun providerServiceEdit(id: String)   = "provider/service/$id/edit"
@@ -51,13 +49,11 @@ object Routes {
     const val PLACEHOLDER = "placeholder/{role}"
     fun placeholder(role: UserRole) = "placeholder/${role.api}"
 
-    /** Single source of truth for post-auth landing. */
     fun home(role: UserRole): String = when (role) {
         UserRole.PROVIDER -> PROVIDER_HOME
         else              -> placeholder(role)
     }
 
-    /** Maps tab id from ProviderTabBar → route. Used by every provider tab screen. */
     fun providerTab(tabId: String): String = when (tabId) {
         "home"     -> PROVIDER_HOME
         "jobs"     -> PROVIDER_JOBS

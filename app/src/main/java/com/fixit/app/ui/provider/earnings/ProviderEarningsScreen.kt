@@ -16,11 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,38 +30,48 @@ import com.fixit.app.domain.model.WalletTransaction
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.IconBox
 import com.fixit.app.ui.components.ProviderTabBar
+import com.fixit.app.ui.provider.payment.AddPaymentMethodSheet
+import com.fixit.app.ui.provider.payment.WithdrawSelectSheet
 import com.fixit.app.ui.theme.C
 import com.fixit.app.ui.util.formatMoney
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlin.collections.forEach
-import kotlin.collections.forEachIndexed
-import kotlin.collections.maxOrNull
-import kotlin.collections.take
-import kotlin.let
-import kotlin.ranges.coerceAtLeast
-import kotlin.takeIf
-import kotlin.text.isNotBlank
+import kotlin.math.abs
 import kotlin.time.toJavaInstant
 
 @Composable
 fun ProviderEarningsScreen(
     onBack: () -> Unit,
     onTabClick: (String) -> Unit,
-    onWithdraw: () -> Unit,
-    viewModel: ProviderEarningsViewModel = hiltViewModel()
+    onNavigateToWithdrawConfirm: () -> Unit,
+    viewModel: ProviderEarningsViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.state.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val state         by viewModel.state.collectAsState()
+    val snackbarState = remember { SnackbarHostState() }
 
-    LaunchedEffect(state.errorMessage) {
-        state.errorMessage?.let { snackbarHostState.showSnackbar(it) }
+    // Add method sheet transient state lives here so we can pass it down
+    var addType        by remember { mutableStateOf("bank") }
+    var addName        by remember { mutableStateOf("") }
+    var addLastFour    by remember { mutableStateOf("") }
+    var addIsDefault   by remember { mutableStateOf(false) }
+    var isAddSubmitting by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is EarningsEffect.NavigateToWithdrawConfirm -> onNavigateToWithdrawConfirm()
+                is EarningsEffect.WithdrawalComplete ->
+                    snackbarState.showSnackbar("Withdrawal submitted — funds arriving in 1–2 days")
+                is EarningsEffect.ShowError ->
+                    snackbarState.showSnackbar(effect.message)
+            }
+        }
     }
 
     FixItScreen(bg = C.Subtle) {
+        // ── Top bar ──────────────────────────────────────────────────────────
         Row(
             Modifier
                 .fillMaxWidth()
@@ -73,20 +79,20 @@ fun ProviderEarningsScreen(
                 .padding(horizontal = 20.dp)
                 .padding(top = 16.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack,
-                null,
+                contentDescription = "Back",
                 tint = C.Ink,
-                modifier = Modifier.size(22.dp).clickable { onBack() }
+                modifier = Modifier.size(22.dp).clickable { onBack() },
             )
             Text(
                 "Earnings",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = C.Ink,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
         }
 
@@ -94,16 +100,16 @@ fun ProviderEarningsScreen(
             Column(
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(rememberScrollState()),
             ) {
-                // Available balance hero
+                // ── Available balance hero ────────────────────────────────────
                 Box(Modifier.padding(horizontal = 20.dp).padding(top = 16.dp)) {
                     Box(
                         Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
                             .background(C.Blue)
-                            .padding(18.dp)
+                            .padding(18.dp),
                     ) {
                         Column {
                             Text(
@@ -111,7 +117,7 @@ fun ProviderEarningsScreen(
                                 color = Color.White.copy(alpha = 0.8f),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
-                                letterSpacing = 0.3.sp
+                                letterSpacing = 0.3.sp,
                             )
                             Text(
                                 formatMoney(state.balance),
@@ -119,7 +125,7 @@ fun ProviderEarningsScreen(
                                 fontSize = 36.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 letterSpacing = (-1).sp,
-                                modifier = Modifier.padding(top = 6.dp)
+                                modifier = Modifier.padding(top = 6.dp),
                             )
                             Box(
                                 Modifier
@@ -127,22 +133,24 @@ fun ProviderEarningsScreen(
                                     .padding(top = 14.dp)
                                     .clip(RoundedCornerShape(22.dp))
                                     .background(C.Orange)
-                                    .clickable { onWithdraw() }
+                                    .clickable(enabled = state.balance.signum() > 0) {
+                                        viewModel.onWithdrawClicked()
+                                    }
                                     .padding(vertical = 11.dp),
-                                contentAlignment = Alignment.Center
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     "Withdraw to bank · 1–2 days",
                                     color = Color.White,
                                     fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
                                 )
                             }
                         }
                     }
                 }
 
-                // This week chart
+                // ── This week chart ────────────────────────────────────────────
                 Box(Modifier.padding(horizontal = 20.dp).padding(top = 16.dp)) {
                     Column(
                         Modifier
@@ -150,21 +158,19 @@ fun ProviderEarningsScreen(
                             .clip(RoundedCornerShape(14.dp))
                             .background(Color.White)
                             .border(1.dp, C.Line, RoundedCornerShape(14.dp))
-                            .padding(14.dp)
+                            .padding(14.dp),
                     ) {
-                        Text(
-                            "This week",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = C.Ink
-                        )
+                        Text("This week", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = C.Ink)
 
-                        val maxBar = state.weeklyBars.maxOrNull() ?: BigDecimal.ZERO
-                        val today = LocalDate.now().dayOfWeek.value - 1   // 0..6, Mon..Sun
+                        val maxBar  = state.weeklyBars.maxOrNull() ?: BigDecimal.ZERO
+                        val todayIdx = java.time.LocalDate.now().dayOfWeek.value - 1
                         Row(
-                            Modifier.fillMaxWidth().height(90.dp).padding(top = 6.dp),
+                            Modifier
+                                .fillMaxWidth()
+                                .height(90.dp)
+                                .padding(top = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.Bottom
+                            verticalAlignment = Alignment.Bottom,
                         ) {
                             val labels = listOf("M", "T", "W", "T", "F", "S", "S")
                             state.weeklyBars.forEachIndexed { i, value ->
@@ -173,55 +179,72 @@ fun ProviderEarningsScreen(
                                 Column(
                                     Modifier.weight(1f),
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Bottom
+                                    verticalArrangement = Arrangement.Bottom,
                                 ) {
                                     Box(
                                         Modifier
                                             .fillMaxWidth()
                                             .fillMaxHeight(frac.coerceAtLeast(0.04f))
                                             .clip(RoundedCornerShape(4.dp))
-                                            .background(if (i == today) C.Orange else C.Blue.copy(alpha = 0.85f))
+                                            .background(
+                                                if (i == todayIdx) C.Orange
+                                                else C.Blue.copy(alpha = 0.85f)
+                                            )
                                     )
                                     Spacer(Modifier.height(4.dp))
                                     Text(labels[i], fontSize = 10.sp, color = C.Mute)
                                 }
                             }
                         }
-                        Text(
-                            formatMoney(state.thisWeekTotal),
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = C.Ink,
-                            modifier = Modifier.padding(top = 12.dp)
-                        )
-                        // TODO: vs-last-week comparison once we paginate transactions further back.
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                formatMoney(state.thisWeekTotal),
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = C.Ink,
+                            )
+                            state.weekChangePercent?.let { pct ->
+                                val positive = pct >= 0
+                                Text(
+                                    "${if (positive) "↑" else "↓"} ${abs(pct)}% vs last week",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (positive) C.GreenText else C.Slate,
+                                )
+                            }
+                        }
                     }
                 }
 
-                // Recent payouts
+                // ── Recent activity ───────────────────────────────────────────
                 Text(
                     "RECENT ACTIVITY",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = C.Slate,
                     letterSpacing = 0.5.sp,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 10.dp)
+                    modifier = Modifier.padding(
+                        start = 20.dp, end = 20.dp, top = 20.dp, bottom = 10.dp,
+                    ),
                 )
+
                 if (state.transactions.isEmpty() && !state.isLoading) {
                     Text(
                         "No transactions yet.",
                         fontSize = 12.sp,
                         color = C.Mute,
-                        modifier = Modifier.padding(horizontal = 20.dp)
+                        modifier = Modifier.padding(horizontal = 20.dp),
                     )
                 } else {
                     Column(
                         Modifier.padding(horizontal = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        state.transactions.take(20).forEach { tx ->
-                            PayoutRow(tx)
-                        }
+                        state.transactions.take(20).forEach { tx -> PayoutRow(tx) }
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -234,22 +257,78 @@ fun ProviderEarningsScreen(
             }
         }
 
-        SnackbarHost(snackbarHostState, modifier = Modifier.padding(horizontal = 16.dp))
+        SnackbarHost(snackbarState, modifier = Modifier.padding(horizontal = 16.dp))
         ProviderTabBar(active = "home", onTabClick = onTabClick)
+    }
+
+    // ── Withdraw select sheet ─────────────────────────────────────────────────
+    if (state.showWithdrawSheet) {
+        WithdrawSelectSheet(
+            balance               = state.balance,
+            methods               = state.methods,
+            selectedMethodId      = state.selectedMethodIdForWithdraw,
+            saveAsDefault         = state.saveAsDefault,
+            isWithdrawing         = state.isWithdrawing,
+            withdrawAmountInput   = state.withdrawAmountInput,
+            withdrawAmountError   = state.withdrawAmountError,
+            onAmountChange        = { viewModel.updateWithdrawAmount(it) },
+            onSetMax              = { viewModel.setMaxWithdrawAmount() },
+            onSelectMethod        = { viewModel.selectMethodForWithdraw(it) },
+            onSaveAsDefaultChange = { viewModel.setSaveAsDefault(it) },
+            onAddMethod          = {
+                addType      = "bank"
+                addName      = ""
+                addLastFour  = ""
+                addIsDefault = state.methods.isEmpty()
+                viewModel.showAddMethodSheet()
+            },
+            onWithdraw            = { viewModel.submitWithdrawal() },
+            onDismiss             = { viewModel.dismissWithdrawSheet() },
+        )
+    }
+
+    // ── Add method sheet ──────────────────────────────────────────────────────
+    if (state.showAddMethodSheet) {
+        AddPaymentMethodSheet(
+            methodType          = addType,
+            displayName         = addName,
+            lastFour            = addLastFour,
+            isDefault           = addIsDefault,
+            isSubmitting        = isAddSubmitting,
+            onTypeChange        = { addType = it },
+            onDisplayNameChange = { addName = it },
+            onLastFourChange    = {
+                if (it.length <= 4 && it.all { c -> c.isDigit() }) addLastFour = it
+            },
+            onIsDefaultChange   = { addIsDefault = it },
+            onSubmit            = {
+                isAddSubmitting = true
+                viewModel.submitAddMethod(
+                    type        = addType,
+                    displayName = addName.trim(),
+                    lastFour    = addLastFour.takeIf { it.length == 4 },
+                    isDefault   = addIsDefault,
+                )
+                isAddSubmitting = false
+            },
+            onDismiss           = { viewModel.dismissAddMethodSheet() },
+        )
     }
 }
 
+// ── Updated PayoutRow — green for income, blue for withdrawal ─────────────────
+
 @Composable
 private fun PayoutRow(tx: WalletTransaction) {
-    val negative = tx.amount.signum() < 0
-    val sign = if (negative) "−" else "+"
-    val displayLabel = tx.description?.takeIf { it.isNotBlank() }
+    val isIncome  = tx.amount.signum() > 0
+    val sign      = if (isIncome) "+" else "−"
+    val label     = tx.description?.takeIf { it.isNotBlank() }
         ?: when (tx.type) {
             TransactionType.TOP_UP  -> "Top-up"
             TransactionType.PAYMENT -> "Payment"
             TransactionType.PAYOUT  -> "Withdrawal"
             TransactionType.REFUND  -> "Refund"
-            TransactionType.RELEASE -> "Escrow release"
+            TransactionType.RELEASE -> "Job payment"
             TransactionType.UNKNOWN -> "Transaction"
         }
     val date = tx.createdAt.toJavaInstant()
@@ -264,25 +343,25 @@ private fun PayoutRow(tx: WalletTransaction) {
             .border(1.dp, C.Line, RoundedCornerShape(10.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        IconBox(bg = if (negative) C.BlueSoft else C.OrangeSoft) {
+        IconBox(bg = if (isIncome) C.GreenSoft else C.BlueSoft) {
             Icon(
-                if (negative) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
-                null,
-                tint = if (negative) C.Blue else C.Orange,
-                modifier = Modifier.size(16.dp)
+                if (isIncome) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                contentDescription = null,
+                tint = if (isIncome) C.GreenText else C.Blue,
+                modifier = Modifier.size(16.dp),
             )
         }
         Column(Modifier.weight(1f)) {
-            Text(displayLabel, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
             Text(date, fontSize = 11.sp, color = C.Mute, modifier = Modifier.padding(top = 1.dp))
         }
         Text(
             "$sign${formatMoney(tx.amount.abs())}",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            color = if (negative) C.Ink else C.OrangeText
+            color = if (isIncome) C.GreenText else C.Ink,
         )
     }
 }

@@ -1,4 +1,4 @@
-package com.fixit.app.ui.provider.earnings
+package com.fixit.app.ui.provider.payment
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -26,50 +26,65 @@ import javax.inject.Inject
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-data class ProviderEarningsState(
+// ── State ────────────────────────────────────────────────────────────────────
+
+data class PaymentPayoutsState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val balance: BigDecimal = BigDecimal.ZERO,
     val weeklyBars: List<BigDecimal> = List(7) { BigDecimal.ZERO },
     val thisWeekTotal: BigDecimal = BigDecimal.ZERO,
     val weekChangePercent: Int? = null,
-    val transactions: List<WalletTransaction> = emptyList(),
-    // Payment method + withdraw sheet
     val methods: List<SavedPaymentMethod> = emptyList(),
+    val recentTransactions: List<WalletTransaction> = emptyList(),
+    // Withdraw sheet
     val showWithdrawSheet: Boolean = false,
-    val showAddMethodSheet: Boolean = false,
     val selectedMethodIdForWithdraw: String? = null,
     val saveAsDefault: Boolean = false,
     val withdrawAmountInput: String = "",
     val withdrawAmountError: String? = null,
     val isWithdrawing: Boolean = false,
+    // Add-method sheet
+    val showAddMethodSheet: Boolean = false,
+    val addMethodType: String = "bank",
+    val addMethodDisplayName: String = "",
+    val addMethodLastFour: String = "",
+    val addMethodIsDefault: Boolean = false,
+    val isAddingMethod: Boolean = false,
 ) {
     val defaultMethod: SavedPaymentMethod? get() = methods.firstOrNull { it.isDefault }
 
+    /** Parsed, validated withdrawal amount. Null when input is invalid. */
     val withdrawAmount: BigDecimal?
         get() = withdrawAmountInput.toBigDecimalOrNull()
             ?.takeIf { it.signum() > 0 && it <= balance }
 }
 
-sealed class EarningsEffect {
-    object NavigateToWithdrawConfirm : EarningsEffect()
-    data class ShowError(val message: String) : EarningsEffect()
-    object WithdrawalComplete : EarningsEffect()
+// ── One-shot effects ─────────────────────────────────────────────────────────
+
+sealed class PaymentPayoutsEffect {
+    object NavigateToWithdrawConfirm : PaymentPayoutsEffect()
+    object WithdrawalComplete : PaymentPayoutsEffect()
+    data class ShowError(val message: String) : PaymentPayoutsEffect()
 }
 
+// ── ViewModel ────────────────────────────────────────────────────────────────
+
 @HiltViewModel
-class ProviderEarningsViewModel @Inject constructor(
+class PaymentPayoutsViewModel @Inject constructor(
     private val walletRepo: WalletRepository,
     private val paymentRepo: PaymentRepository,
 ) : ViewModel() {
 
-    private val _state   = MutableStateFlow(ProviderEarningsState())
+    private val _state   = MutableStateFlow(PaymentPayoutsState())
     val state = _state.asStateFlow()
 
-    private val _effects = Channel<EarningsEffect>(Channel.BUFFERED)
+    private val _effects = Channel<PaymentPayoutsEffect>(Channel.BUFFERED)
     val effects = _effects.receiveAsFlow()
 
     init { refresh() }
+
+    // ── Load ─────────────────────────────────────────────────────────────────
 
     fun refresh() {
         viewModelScope.launch {
@@ -110,35 +125,36 @@ class ProviderEarningsViewModel @Inject constructor(
                 } else null
 
                 _state.value = _state.value.copy(
-                    isLoading         = false,
-                    balance           = BigDecimal.valueOf(wallet.balance),
-                    weeklyBars        = bars,
-                    thisWeekTotal     = weekTotal,
-                    weekChangePercent = changePercent,
-                    transactions      = transactions,
-                    methods           = methods,
+                    isLoading          = false,
+                    balance            = BigDecimal.valueOf(wallet.balance),
+                    weeklyBars         = bars,
+                    thisWeekTotal      = weekTotal,
+                    weekChangePercent  = changePercent,
+                    methods            = methods,
+                    recentTransactions = transactions.take(10),
                 )
             }.onFailure { e ->
                 _state.value = _state.value.copy(
                     isLoading    = false,
-                    errorMessage = e.message ?: "Couldn't load earnings",
+                    errorMessage = e.message ?: "Couldn't load payment data",
                 )
             }
         }
     }
 
-    // ── Withdraw ──────────────────────────────────────────────────────────────
+    // ── Withdraw flow ─────────────────────────────────────────────────────────
 
     fun onWithdrawClicked() {
         val default = _state.value.defaultMethod
         if (default != null) {
-            viewModelScope.launch { _effects.send(EarningsEffect.NavigateToWithdrawConfirm) }
+            viewModelScope.launch { _effects.send(PaymentPayoutsEffect.NavigateToWithdrawConfirm) }
         } else {
             val firstId = _state.value.methods.firstOrNull()?.id
             _state.value = _state.value.copy(
                 showWithdrawSheet           = true,
                 selectedMethodIdForWithdraw = firstId,
                 saveAsDefault               = false,
+                // Pre-fill with full available balance
                 withdrawAmountInput         = _state.value.balance.toPlainString(),
                 withdrawAmountError         = null,
             )
@@ -192,20 +208,53 @@ class ProviderEarningsViewModel @Inject constructor(
                     showWithdrawSheet = false,
                     balance           = (_state.value.balance - amount).coerceAtLeast(BigDecimal.ZERO),
                 )
-                _effects.send(EarningsEffect.WithdrawalComplete)
+                _effects.send(PaymentPayoutsEffect.WithdrawalComplete)
             }.onFailure { e ->
                 _state.value = _state.value.copy(isWithdrawing = false)
-                _effects.send(EarningsEffect.ShowError(e.message ?: "Withdrawal failed"))
+                _effects.send(PaymentPayoutsEffect.ShowError(e.message ?: "Withdrawal failed"))
             }
         }
     }
 
-    // ── Add method ────────────────────────────────────────────────────────────
+    // ── Payment method management ─────────────────────────────────────────────
+
+    fun setDefault(methodId: String) {
+        viewModelScope.launch {
+            runCatching { paymentRepo.setDefault(methodId) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        methods = _state.value.methods.map { m ->
+                            m.copy(isDefault = m.id == methodId)
+                        }
+                    )
+                }.onFailure { e ->
+                    _effects.send(PaymentPayoutsEffect.ShowError(e.message ?: "Failed to update default"))
+                }
+        }
+    }
+
+    fun deleteMethod(methodId: String) {
+        viewModelScope.launch {
+            runCatching { paymentRepo.deleteMethod(methodId) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        methods = _state.value.methods.filter { it.id != methodId }
+                    )
+                }.onFailure { e ->
+                    _effects.send(PaymentPayoutsEffect.ShowError(e.message ?: "Failed to remove method"))
+                }
+        }
+    }
+
+    // ── Add-method sheet ──────────────────────────────────────────────────────
 
     fun showAddMethodSheet() {
         _state.value = _state.value.copy(
-            showWithdrawSheet  = false,
-            showAddMethodSheet = true,
+            showAddMethodSheet   = true,
+            addMethodType        = "bank",
+            addMethodDisplayName = "",
+            addMethodLastFour    = "",
+            addMethodIsDefault   = _state.value.methods.isEmpty(),
         )
     }
 
@@ -213,31 +262,51 @@ class ProviderEarningsViewModel @Inject constructor(
         _state.value = _state.value.copy(showAddMethodSheet = false)
     }
 
-    fun submitAddMethod(
-        type: String,
-        displayName: String,
-        lastFour: String?,
-        isDefault: Boolean,
-    ) {
+    fun updateAddMethodType(type: String) {
+        _state.value = _state.value.copy(addMethodType = type)
+    }
+
+    fun updateAddMethodDisplayName(name: String) {
+        _state.value = _state.value.copy(addMethodDisplayName = name)
+    }
+
+    fun updateAddMethodLastFour(digits: String) {
+        if (digits.length <= 4 && digits.all { it.isDigit() }) {
+            _state.value = _state.value.copy(addMethodLastFour = digits)
+        }
+    }
+
+    fun updateAddMethodIsDefault(value: Boolean) {
+        _state.value = _state.value.copy(addMethodIsDefault = value)
+    }
+
+    fun submitAddMethod() {
+        val s = _state.value
+        if (s.addMethodDisplayName.isBlank()) return
         viewModelScope.launch {
-            runCatching { paymentRepo.addMethod(type, displayName, lastFour, isDefault) }
-                .onSuccess { newMethod ->
-                    val updated = if (isDefault) {
-                        _state.value.methods.map { it.copy(isDefault = false) } + newMethod
-                    } else {
-                        _state.value.methods + newMethod
-                    }
-                    _state.value = _state.value.copy(
-                        methods            = updated,
-                        showAddMethodSheet = false,
-                        showWithdrawSheet  = true,
-                        selectedMethodIdForWithdraw =
-                            if (isDefault) newMethod.id
-                            else _state.value.selectedMethodIdForWithdraw ?: newMethod.id,
-                    )
-                }.onFailure { e ->
-                    _effects.send(EarningsEffect.ShowError(e.message ?: "Failed to add method"))
+            _state.value = _state.value.copy(isAddingMethod = true)
+            runCatching {
+                paymentRepo.addMethod(
+                    type        = s.addMethodType,
+                    displayName = s.addMethodDisplayName.trim(),
+                    lastFour    = s.addMethodLastFour.takeIf { it.length == 4 },
+                    isDefault   = s.addMethodIsDefault,
+                )
+            }.onSuccess { newMethod ->
+                val updatedMethods = if (s.addMethodIsDefault) {
+                    _state.value.methods.map { it.copy(isDefault = false) } + newMethod
+                } else {
+                    _state.value.methods + newMethod
                 }
+                _state.value = _state.value.copy(
+                    methods            = updatedMethods,
+                    showAddMethodSheet = false,
+                    isAddingMethod     = false,
+                )
+            }.onFailure { e ->
+                _state.value = _state.value.copy(isAddingMethod = false)
+                _effects.send(PaymentPayoutsEffect.ShowError(e.message ?: "Failed to add method"))
+            }
         }
     }
 
