@@ -24,14 +24,14 @@ data class DisputeDetailState(
     val isLoading: Boolean = false,
     val dispute: Dispute? = null,
     val errorMessage: String? = null,
-    // ── Response form (PENDING_RESPONSE only) ──────────────────────────
     val responseText: String = "",
     val uploadedImageUrls: List<String> = emptyList(),
     val isUploading: Boolean = false,
     val isSubmitting: Boolean = false,
     val isDraftSaved: Boolean = false,
-    // ── Image viewer ───────────────────────────────────────────────────
     val viewingImages: List<String>? = null,
+    /** Set after first successful refresh; gates re-load on subsequent ON_STARTs. */
+    val hasLoaded: Boolean = false,
 ) {
     val canSubmit: Boolean
         get() = responseText.length >= 10 && !isUploading && !isSubmitting
@@ -61,9 +61,11 @@ class DisputeDetailViewModel @Inject constructor(
     private val _effects = MutableSharedFlow<DisputeDetailEffect>()
     val effects = _effects.asSharedFlow()
 
-    init { refresh() }
+    // First load driven by the screen's OnLifecycleStart. `hasLoaded` keeps
+    // user-typed response text intact across subsequent ON_STARTs.
 
     fun refresh() {
+        if (_state.value.hasLoaded) return
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, errorMessage = null) }
             runCatching {
@@ -78,11 +80,11 @@ class DisputeDetailViewModel @Inject constructor(
                         s.copy(
                             isLoading    = false,
                             dispute      = dispute,
-                            // Pre-populate from draft only if still pending
                             responseText = if (dispute.disputeStatus == DisputeStatus.PENDING_RESPONSE)
                                 draft ?: s.responseText
                             else
                                 s.responseText,
+                            hasLoaded    = true,
                         )
                     }
                 }
@@ -96,7 +98,6 @@ class DisputeDetailViewModel @Inject constructor(
         _state.update { it.copy(responseText = text, isDraftSaved = false) }
     }
 
-    /** Called by the screen after the photo picker returns URIs. */
     fun onImagesSelected(uris: List<Uri>) {
         if (uris.isEmpty()) return
         viewModelScope.launch {

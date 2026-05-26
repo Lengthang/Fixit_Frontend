@@ -20,7 +20,6 @@ data class ProviderReviewsState(
     val summary: RatingSummary? = null,
     val reviews: List<Review> = emptyList(),
 ) {
-    /** Star rating → count. Always covers 1..5 so the bars draw consistently. */
     val distribution: Map<Int, Int>
         get() = (1..5).associateWith { s -> reviews.count { it.rating == s } }
 }
@@ -34,7 +33,7 @@ class ProviderReviewsViewModel @Inject constructor(
     private val _state = MutableStateFlow(ProviderReviewsState())
     val state = _state.asStateFlow()
 
-    init { refresh() }
+    // First load + every subsequent ON_START refresh driven by the screen.
 
     fun refresh() {
         viewModelScope.launch {

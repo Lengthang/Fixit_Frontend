@@ -35,6 +35,7 @@ import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.ProviderTabBar
 import com.fixit.app.ui.components.StatusBadge
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 import com.fixit.app.ui.util.avatarColorFor
 import com.fixit.app.ui.util.formatMoney
 import com.fixit.app.ui.util.formatScheduled
@@ -52,6 +53,7 @@ fun ProviderJobsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    OnLifecycleStart(viewModel::refresh)
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbarHostState.showSnackbar(it) }

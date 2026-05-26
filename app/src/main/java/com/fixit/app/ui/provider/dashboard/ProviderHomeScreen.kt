@@ -56,6 +56,7 @@ import com.fixit.app.ui.components.EmptyState
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.ProviderTabBar
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 import java.math.BigDecimal
 import java.text.NumberFormat
 import java.util.Locale
@@ -73,6 +74,7 @@ fun ProviderHomeScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    OnLifecycleStart(viewModel::refresh)
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbarHostState.showSnackbar(it) }

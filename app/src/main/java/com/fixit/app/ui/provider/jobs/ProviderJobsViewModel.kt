@@ -19,11 +19,9 @@ data class ProviderJobsState(
     val tab: JobsTab = JobsTab.NEW,
     val bookings: List<Booking> = emptyList(),
 ) {
-    /** Count for the "New" tab badge. */
     val newCount: Int
         get() = bookings.count { it.status == BookingStatus.PENDING }
 
-    /** Bookings filtered by the active tab, sorted newest first / soonest first. */
     val visible: List<Booking>
         get() = when (tab) {
             JobsTab.NEW       -> bookings
@@ -49,7 +47,7 @@ class ProviderJobsViewModel @Inject constructor(
     private val _state = MutableStateFlow(ProviderJobsState())
     val state = _state.asStateFlow()
 
-    init { refresh() }
+    // First load + every subsequent ON_START refresh driven by the screen.
 
     fun selectTab(tab: JobsTab) {
         _state.value = _state.value.copy(tab = tab)

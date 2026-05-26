@@ -77,6 +77,7 @@ import com.fixit.app.ui.components.TopBar
 import com.fixit.app.ui.signup.provider.MapBackground
 import com.fixit.app.ui.signup.provider.RadiusSlider
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Public screen — wired by NavGraph at Routes.PROVIDER_EDIT_PROFILE.
@@ -115,6 +116,7 @@ fun EditProfileScreen(
         viewModel.setUploadTarget(target)
         imagePicker.launch("image/*")
     }
+    OnLifecycleStart(viewModel::refresh)
 
     // Auto-resolve location on first composition, same as ServiceAreaScreen.
     // The VM no-ops if already resolved or a fix is in-flight.

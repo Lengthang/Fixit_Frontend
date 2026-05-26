@@ -53,6 +53,7 @@ import com.fixit.app.domain.model.DisputeStatus
 import com.fixit.app.ui.components.Avatar
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 import com.fixit.app.ui.util.avatarColorFor
 import com.fixit.app.ui.util.formatMoney
 import com.fixit.app.ui.util.initialsFor
@@ -73,6 +74,7 @@ fun DisputeDetailScreen(
     ) { uris: List<Uri> ->
         viewModel.onImagesSelected(uris)
     }
+    OnLifecycleStart(viewModel::refresh)
 
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->

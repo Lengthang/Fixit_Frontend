@@ -39,11 +39,6 @@ data class ProviderHomeState(
     val stats: DashboardStats = DashboardStats(),
     val newRequests: List<JobRequest> = emptyList(),
     val upcoming: List<UpcomingJob> = emptyList(),
-    /**
-     * Provider approval status. Null while the provider profile is still
-     * loading — the screen treats null as "don't know yet, render the normal
-     * layout" so there's no flash of the pending UI before data lands.
-     */
     val providerStatus: ProviderStatus? = null,
 )
 
@@ -58,7 +53,9 @@ class ProviderHomeViewModel @Inject constructor(
     private val _state = MutableStateFlow(ProviderHomeState())
     val state = _state.asStateFlow()
 
-    init { refresh() }
+    // NOTE: no init { refresh() } — screen-side OnLifecycleStart calls refresh()
+    // on first composition AND on every subsequent ON_START (e.g. after a child
+    // screen pops back, or after the app returns from background).
 
     fun refresh() {
         viewModelScope.launch {
@@ -79,8 +76,6 @@ class ProviderHomeViewModel @Inject constructor(
     fun dismissError() {
         _state.value = _state.value.copy(errorMessage = null)
     }
-
-    // ── loading ──
 
     private suspend fun loadAll() = coroutineScope {
         val meDeferred       = async { runCatching { customerRepo.me() } }
@@ -104,7 +99,6 @@ class ProviderHomeViewModel @Inject constructor(
             initials       = initialsOf(me?.name),
             avatarUrl      = avatarUrl,
             balance        = wallet?.balance?.let { BigDecimal.valueOf(it) } ?: BigDecimal.ZERO,
-            // Drives the pending-approval branch in ProviderHomeScreen.
             providerStatus = ProviderStatus.fromApi(provider?.status),
             stats          = computeStats(
                 bookings   = bookings,
@@ -127,8 +121,6 @@ class ProviderHomeViewModel @Inject constructor(
                 .map { it.toUpcomingJob(tz) },
         )
     }
-
-    // ── derivations ──
 
     private fun computeStats(
         bookings: List<BookingResponse>,
@@ -189,8 +181,6 @@ class ProviderHomeViewModel @Inject constructor(
             sub   = subParts.joinToString(" · "),
         )
     }
-
-    // ── formatters ──
 
     private fun timeOfDayGreeting(hourOfDay: Int): String = when {
         hourOfDay < 12 -> "Good morning"

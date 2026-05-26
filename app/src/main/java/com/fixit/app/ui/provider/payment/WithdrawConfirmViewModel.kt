@@ -24,8 +24,14 @@ data class WithdrawConfirmState(
     val withdrawAmountError: String? = null,
     val errorMessage: String? = null,
     val isWithdrawing: Boolean = false,
+    /**
+     * Set once after a successful refresh so subsequent ON_STARTs don't reset
+     * the user's typed-in amount. The form value belongs to the user, not the
+     * server — we only want refresh-on-resume for the wallet/methods data,
+     * which has already populated on first load anyway.
+     */
+    val hasLoaded: Boolean = false,
 ) {
-    /** Validated parsed amount — null when input is invalid. */
     val withdrawAmount: BigDecimal?
         get() = withdrawAmountInput.toBigDecimalOrNull()
             ?.takeIf { it.signum() > 0 && it <= balance }
@@ -48,9 +54,11 @@ class WithdrawConfirmViewModel @Inject constructor(
     private val _effects = Channel<WithdrawConfirmEffect>(Channel.BUFFERED)
     val effects = _effects.receiveAsFlow()
 
-    init { load() }
+    // First load driven by the screen's OnLifecycleStart. The `hasLoaded` guard
+    // prevents subsequent ON_STARTs from clobbering the user-typed amount.
 
-    private fun load() {
+    fun refresh() {
+        if (_state.value.hasLoaded) return
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true)
             runCatching {
@@ -64,10 +72,10 @@ class WithdrawConfirmViewModel @Inject constructor(
                 _state.value = _state.value.copy(
                     isLoading           = false,
                     balance             = balance,
-                    // Pre-fill with full available balance so "Confirm" works in one tap
                     withdrawAmountInput = balance.toPlainString(),
                     withdrawAmountError = null,
                     defaultMethod       = methods.firstOrNull { it.isDefault },
+                    hasLoaded           = true,
                 )
             }.onFailure { e ->
                 _state.value = _state.value.copy(

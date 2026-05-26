@@ -45,6 +45,7 @@ import com.fixit.app.ui.components.IconBox
 import com.fixit.app.ui.components.InfoPill
 import com.fixit.app.ui.components.StatusBadge
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 import com.fixit.app.ui.util.avatarColorFor
 import com.fixit.app.ui.util.formatMoney
 import com.fixit.app.ui.util.formatScheduled
@@ -60,6 +61,7 @@ fun JobDetailScreen(
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingCancelConfirm by remember { mutableStateOf(false) }
+    OnLifecycleStart(viewModel::refresh)
 
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->

@@ -31,6 +31,7 @@ import com.fixit.app.domain.model.Booking
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.ProviderTabBar
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 import com.fixit.app.ui.util.formatTime
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -51,6 +52,7 @@ fun ProviderCalendarScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    OnLifecycleStart(viewModel::refresh)
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbarHostState.showSnackbar(it) }

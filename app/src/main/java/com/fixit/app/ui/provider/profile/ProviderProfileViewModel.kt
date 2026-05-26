@@ -40,15 +40,11 @@ class ProviderProfileViewModel @Inject constructor(
     private val _state = MutableStateFlow(ProviderProfileState())
     val state = _state.asStateFlow()
 
-    /**
-     * Observed by NavGraph (not the screen). When this flips to true we
-     * navigate to Welcome. Kept separate from `state` so the screen doesn't
-     * need to know about it — preserves the rule of no UI changes.
-     */
     private val _signedOut = MutableStateFlow(false)
     val signedOut = _signedOut.asStateFlow()
 
-    init { refresh() }
+    // NOTE: no init { refresh() } — the screen drives the first load via
+    // OnLifecycleStart so the same code path also handles "navigated back".
 
     fun refresh() {
         viewModelScope.launch {
@@ -74,8 +70,6 @@ class ProviderProfileViewModel @Inject constructor(
     }
 
     private suspend fun loadAll() = coroutineScope {
-        // Parallel fetches — survive individual failures so the screen still
-        // renders partial data instead of going completely blank.
         val meDeferred       = async { runCatching { customerRepo.me() } }
         val providerDeferred = async { runCatching { providerRepo.me() } }
         val bookingsDeferred = async { runCatching { bookingRepo.providerBookingsAsDomain() } }
@@ -84,7 +78,6 @@ class ProviderProfileViewModel @Inject constructor(
         val provider = providerDeferred.await().getOrNull()
         val bookings = bookingsDeferred.await().getOrNull().orEmpty()
 
-        // Reviews summary needs the provider profile id.
         val ratingSummary = provider?.id?.let { pid ->
             runCatching { reviewRepo.summaryForProvider(pid) }.getOrNull()
         }

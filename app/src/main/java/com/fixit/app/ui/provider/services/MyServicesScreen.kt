@@ -49,6 +49,7 @@ import com.fixit.app.ui.components.EmptyState
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.ProviderTabBar
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 import com.fixit.app.ui.util.avatarColorFor
 import com.fixit.app.ui.util.formatMoney
 
@@ -62,6 +63,7 @@ fun MyServicesScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    OnLifecycleStart(viewModel::refresh)
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let {

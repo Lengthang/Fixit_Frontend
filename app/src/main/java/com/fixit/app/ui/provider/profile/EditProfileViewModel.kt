@@ -32,10 +32,8 @@ import java.util.Locale
 import javax.inject.Inject
 import kotlin.coroutines.resume
 
-/** Which slot the image picker is targeting on its next callback. */
 enum class UploadTarget { PHOTO, CERTIFICATE, NATIONAL_ID }
 
-/** Day order matches ScheduleScreen — Monday first, indices 0..6. */
 private val DAY_WIRE = listOf(
     "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
 )
@@ -45,43 +43,41 @@ data class EditProfileState(
     val isSaving: Boolean = false,
     val errorMessage: String? = null,
 
-    // Identity (User row)
     val originalName: String = "",
     val name: String = "",
 
-    // Provider profile
     val bio: String = "",
     val yearsExperience: String = "0",
     val profilePhotoUrl: String? = null,
 
-    // Certificates (Q3: single cert + single national ID, both images)
     val certificationName: String = "",
     val certificationUrl: String? = null,
     val nationalIdUrl: String? = null,
 
-    // Categories
     val availableCategories: List<CategoryResponse> = emptyList(),
     val selectedCategoryIds: Set<String> = emptySet(),
     val categoryPickerOpen: Boolean = false,
 
-    // Work location (lat/lng + radius). `locationLabel` is the human-readable
-    // address text — populated by Geocoder when available, else "lat, lng".
     val latitude: Double? = null,
     val longitude: Double? = null,
     val locationLabel: String = "",
     val serviceRadiusKm: Int = 10,
     val locating: Boolean = false,
 
-    // Availability — single shared window across all selected days, same as
-    // ScheduleScreen. activeDays[0] == Monday, [6] == Sunday.
     val activeDays: List<Boolean> = List(7) { false },
-    val openTime: String = "08:00",   // "HH:MM" 24h
-    val closeTime: String = "17:00",  // "HH:MM" 24h
+    val openTime: String = "08:00",
+    val closeTime: String = "17:00",
 
-    // Uploading flags surface inline spinners on each row.
     val uploadingPhoto: Boolean = false,
     val uploadingCert: Boolean = false,
     val uploadingNationalId: Boolean = false,
+
+    /**
+     * True after the first successful load. Used by the screen-side lifecycle
+     * refresh to skip clobbering user-edited form fields with server data on
+     * ON_START if we've already loaded once and the user has the form open.
+     */
+    val hasLoaded: Boolean = false,
 )
 
 sealed interface EditProfileEffect {
@@ -103,21 +99,14 @@ class EditProfileViewModel @Inject constructor(
     private val _effects = MutableSharedFlow<EditProfileEffect>()
     val effects = _effects.asSharedFlow()
 
-    /**
-     * Tracked outside StateFlow so it doesn't trigger recomposition — the
-     * picker reads this synchronously when an image is returned.
-     */
     var pendingUploadTarget: UploadTarget = UploadTarget.PHOTO
         private set
 
-    init { load() }
-
-    // ── form field updaters ───────────────────────────────────────────────
+    // NOTE: no init { load() } — screen-side OnLifecycleStart calls refresh().
 
     fun onNameChange(v: String)              { _state.value = _state.value.copy(name = v.take(120)) }
     fun onBioChange(v: String)               { _state.value = _state.value.copy(bio = v.take(280)) }
     fun onYearsChange(v: String) {
-        // Numeric only, clamp to 0..60.
         val clean = v.filter { it.isDigit() }.take(2)
         _state.value = _state.value.copy(yearsExperience = clean.ifBlank { "0" })
     }
@@ -153,16 +142,10 @@ class EditProfileViewModel @Inject constructor(
         )
     }
 
-    // ── image picker plumbing ─────────────────────────────────────────────
-
     fun setUploadTarget(target: UploadTarget) {
         pendingUploadTarget = target
     }
 
-    /**
-     * Called by the screen when the system image picker returns a URI.
-     * Dispatches the upload to the right slot based on [pendingUploadTarget].
-     */
     fun onImagePicked(uri: Uri) {
         when (pendingUploadTarget) {
             UploadTarget.PHOTO        -> uploadPhoto(uri)
@@ -219,73 +202,44 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
-    // ── location resolution (mirrors ServiceAreaViewModel) ────────────────
-
-    /**
-     * Pulls a fresh device fix and writes lat/lng into state, then resolves a
-     * human-readable address via [Geocoder] and overwrites [locationLabel].
-     *
-     * Behaviour matches ServiceAreaViewModel exactly for the location part —
-     * cached last-known first (fast), then a fresh fix if cache is empty.
-     * The address resolution is the only addition; it runs after coordinates
-     * have already been published so the screen updates "instantly" with
-     * coords, then upgrades to a friendly name when geocoding lands.
-     */
     @SuppressLint("MissingPermission")
     fun resolveLocation() {
         if (_state.value.locating) return
-        _state.value = _state.value.copy(locating = true)
         viewModelScope.launch {
-            val client = LocationServices.getFusedLocationProviderClient(context)
-
-            val cached = suspendCancellableCoroutine<android.location.Location?> { cont ->
-                client.lastLocation
-                    .addOnSuccessListener { cont.resume(it) }
-                    .addOnFailureListener { cont.resume(null) }
-            }
-            val resolved = cached ?: suspendCancellableCoroutine<android.location.Location?> { cont ->
-                val cts = CancellationTokenSource()
-                client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
-                    .addOnSuccessListener { cont.resume(it) }
-                    .addOnFailureListener { cont.resume(null) }
-                cont.invokeOnCancellation { cts.cancel() }
-            }
-
-            if (resolved == null) {
+            _state.value = _state.value.copy(locating = true)
+            val fix = runCatching { fetchLastKnownLocation() }.getOrNull()
+            if (fix != null) {
+                _state.value = _state.value.copy(
+                    latitude       = fix.first,
+                    longitude      = fix.second,
+                    locationLabel  = "%.5f, %.5f".format(fix.first, fix.second),
+                    locating       = false,
+                )
+                val address = reverseGeocode(fix.first, fix.second)
+                if (!address.isNullOrBlank()) {
+                    _state.value = _state.value.copy(locationLabel = address)
+                }
+            } else {
                 _state.value = _state.value.copy(locating = false)
-                return@launch
-            }
-
-            // Phase 1 — coords land instantly so the map/circle/badge reflects
-            // the new fix without waiting for geocoding. Label is a coord
-            // string in the meantime; it's overwritten below if geocoding
-            // succeeds.
-            val lat = resolved.latitude
-            val lng = resolved.longitude
-            _state.value = _state.value.copy(
-                latitude      = lat,
-                longitude     = lng,
-                locationLabel = "%.4f, %.4f".format(lat, lng),
-                locating      = false,
-            )
-
-            // Phase 2 — async reverse-geocode. Best-effort; failures leave the
-            // coord label in place.
-            val address = reverseGeocode(lat, lng)
-            if (!address.isNullOrBlank()) {
-                _state.value = _state.value.copy(locationLabel = address)
             }
         }
     }
 
-    /**
-     * Uses Android's built-in [Geocoder] to turn coordinates into a short
-     * "City, Region" string. Runs on the IO dispatcher because the sync
-     * `getFromLocation(...)` call performs a blocking network request on
-     * older API levels. Deprecation is suppressed because the async variant
-     * only exists from API 33 onward; the project's minSdk is 24.
-     */
-    @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission")
+    private suspend fun fetchLastKnownLocation(): Pair<Double, Double>? =
+        withContext(Dispatchers.IO) {
+            val client = LocationServices.getFusedLocationProviderClient(context)
+            val cts    = CancellationTokenSource()
+            suspendCancellableCoroutine { cont ->
+                client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
+                    .addOnSuccessListener { loc ->
+                        cont.resume(loc?.let { it.latitude to it.longitude })
+                    }
+                    .addOnFailureListener { cont.resume(null) }
+                cont.invokeOnCancellation { cts.cancel() }
+            }
+        }
+
     private suspend fun reverseGeocode(lat: Double, lng: Double): String? =
         withContext(Dispatchers.IO) {
             if (!Geocoder.isPresent()) return@withContext null
@@ -302,9 +256,17 @@ class EditProfileViewModel @Inject constructor(
             }.getOrNull()
         }
 
-    // ── initial load ──────────────────────────────────────────────────────
-
-    private fun load() {
+    /**
+     * Loads the form from the server. Called once on first ON_START, then again
+     * on every subsequent ON_START via the screen's lifecycle observer.
+     *
+     * After [hasLoaded] flips to true we skip subsequent calls: the user is
+     * actively editing the form, and a refresh would clobber their unsaved
+     * changes with server values. The single exception is right after save —
+     * the SavedOk effect pops the screen so the next entry is a fresh VM.
+     */
+    fun refresh() {
+        if (_state.value.hasLoaded) return
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, errorMessage = null)
             runCatching { loadAll() }
@@ -315,13 +277,12 @@ class EditProfileViewModel @Inject constructor(
                     )
                 }
                 .onSuccess {
-                    _state.value = _state.value.copy(isLoading = false)
+                    _state.value = _state.value.copy(isLoading = false, hasLoaded = true)
                 }
         }
     }
 
     private suspend fun loadAll() = coroutineScope {
-        // Fetch in parallel — survive individual failures.
         val meDeferred       = async { runCatching { customerRepo.me() } }
         val providerDeferred = async { runCatching { providerRepo.me() } }
         val categoriesDef    = async { runCatching { categoryRepo.list() } }
@@ -330,9 +291,6 @@ class EditProfileViewModel @Inject constructor(
         val provider   = providerDeferred.await().getOrNull()
         val categories = categoriesDef.await().getOrNull().orEmpty()
 
-        // Map availability to a Monday-first 7-bit array plus a single window.
-        // Multiple slots per day are flattened to "any slot active = day on";
-        // the open/close shown is taken from the first slot found.
         val activeDays = MutableList(7) { false }
         var openTime  = _state.value.openTime
         var closeTime = _state.value.closeTime
@@ -342,7 +300,7 @@ class EditProfileViewModel @Inject constructor(
             if (idx in 0..6) {
                 activeDays[idx] = true
                 if (!sawWindow) {
-                    openTime  = slot.openTime.take(5)   // strip seconds: "08:00:00" → "08:00"
+                    openTime  = slot.openTime.take(5)
                     closeTime = slot.closeTime.take(5)
                     sawWindow = true
                 }
@@ -369,9 +327,6 @@ class EditProfileViewModel @Inject constructor(
             closeTime          = closeTime,
         )
 
-        // If the saved provider record has coordinates but no human-readable
-        // address (or a fallback like "Provider — Service area"), upgrade the
-        // label in the background. Same Geocoder path the Change button uses.
         val savedLat = provider?.latitude
         val savedLng = provider?.longitude
         val savedLabel = provider?.location.orEmpty()
@@ -385,20 +340,10 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
-    // ── save ──────────────────────────────────────────────────────────────
-
-    /**
-     * Fan out the update: name goes through PATCH /customer/me (only if it
-     * changed), everything else through PATCH /providers/me. If either fails
-     * we surface a single combined error and don't pop the screen.
-     */
     fun save() {
         val s = _state.value
         if (s.isSaving) return
 
-        // Build the day→time slots payload. The backend rewrites all
-        // availability rows on every PATCH that includes this field, so the
-        // current state IS the desired full state.
         val slots = s.activeDays.mapIndexedNotNull { i, on ->
             if (!on) null else AvailabilityInput(
                 dayOfWeek = DAY_WIRE[i],
@@ -407,8 +352,6 @@ class EditProfileViewModel @Inject constructor(
             )
         }
 
-        // Validation that matches what the backend will enforce anyway —
-        // catching it client-side gives a nicer message.
         if (s.latitude == null || s.longitude == null) {
             _state.value = s.copy(errorMessage = "Set your work location before saving")
             return
@@ -444,9 +387,6 @@ class EditProfileViewModel @Inject constructor(
                             )
                         )
                     }
-
-                    // Name belongs to the User row, not ProviderProfile.
-                    // Only call if it actually changed.
                     val nameJob = if (s.name.trim() != s.originalName.trim() &&
                         s.name.isNotBlank()
                     ) {
@@ -457,7 +397,6 @@ class EditProfileViewModel @Inject constructor(
                             )
                         }
                     } else null
-
                     providerJob.await()
                     nameJob?.await()
                 }

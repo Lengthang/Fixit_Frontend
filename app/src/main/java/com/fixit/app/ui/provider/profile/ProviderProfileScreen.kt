@@ -45,6 +45,7 @@ import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.IconBox
 import com.fixit.app.ui.components.ProviderTabBar
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 import com.fixit.app.ui.util.initialsFor
 import kotlin.let
 import kotlin.takeIf
@@ -65,7 +66,7 @@ fun ProviderProfileScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showSignOutDialog by remember { mutableStateOf(false) }
-
+    OnLifecycleStart(viewModel::refresh)
     FixItScreen(bg = C.Subtle) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             Column(

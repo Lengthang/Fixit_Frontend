@@ -39,6 +39,7 @@ import com.fixit.app.domain.model.PaymentMethodType
 import com.fixit.app.domain.model.SavedPaymentMethod
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 import com.fixit.app.ui.util.formatMoney
 
 @Composable
@@ -48,6 +49,7 @@ fun WithdrawConfirmScreen(
 ) {
     val state         by viewModel.state.collectAsState()
     val snackbarState = remember { SnackbarHostState() }
+    OnLifecycleStart(viewModel::refresh)
 
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->

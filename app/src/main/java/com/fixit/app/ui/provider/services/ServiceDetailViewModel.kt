@@ -35,13 +35,11 @@ data class ServiceDetailState(
     val isMutating: Boolean = false,
     val errorMessage: String? = null,
     val service: Service? = null,
-    /** Mirrors service.isActive but updates instantly on toggle without a full reload. */
     val isVisible: Boolean = true,
     val recentBooking: RecentBooking? = null,
 )
 
 sealed interface ServiceDetailEffect {
-    /** Pop back to the services list (after a successful delete). */
     data object NavigateBack : ServiceDetailEffect
     data class ShowMessage(val text: String) : ServiceDetailEffect
 }
@@ -63,7 +61,9 @@ class ServiceDetailViewModel @Inject constructor(
     private val _effects = MutableSharedFlow<ServiceDetailEffect>()
     val effects = _effects.asSharedFlow()
 
-    init { refresh() }
+    // First load + every subsequent ON_START refresh driven by the screen.
+    // Important here because the edit flow navigates to AddEditServiceScreen
+    // and pops back; we need the updated price/title/etc. to show up.
 
     fun refresh() {
         viewModelScope.launch {
@@ -124,8 +124,6 @@ class ServiceDetailViewModel @Inject constructor(
         _state.value = _state.value.copy(errorMessage = null)
     }
 
-    // ── loading ───────────────────────────────────────────────────────────
-
     private suspend fun loadAll() = coroutineScope {
         val servicesDeferred = async { serviceRepo.mine() }
         val providerDeferred = async { providerRepo.me() }
@@ -167,8 +165,6 @@ class ServiceDetailViewModel @Inject constructor(
             recentBooking = recentBooking,
         )
     }
-
-    // ── helpers ───────────────────────────────────────────────────────────
 
     private fun ServiceResponse.toDomain(categoryName: String?, bookingCount: Int): Service =
         Service(

@@ -34,7 +34,6 @@ data class ProviderEarningsState(
     val thisWeekTotal: BigDecimal = BigDecimal.ZERO,
     val weekChangePercent: Int? = null,
     val transactions: List<WalletTransaction> = emptyList(),
-    // Payment method + withdraw sheet
     val methods: List<SavedPaymentMethod> = emptyList(),
     val showWithdrawSheet: Boolean = false,
     val showAddMethodSheet: Boolean = false,
@@ -69,7 +68,9 @@ class ProviderEarningsViewModel @Inject constructor(
     private val _effects = Channel<EarningsEffect>(Channel.BUFFERED)
     val effects = _effects.receiveAsFlow()
 
-    init { refresh() }
+    // First load + every subsequent ON_START refresh driven by the screen.
+    // Earnings is sensitive to balance drift after a withdraw, so picking up
+    // changes on resume matters here in particular.
 
     fun refresh() {
         viewModelScope.launch {
@@ -126,8 +127,6 @@ class ProviderEarningsViewModel @Inject constructor(
             }
         }
     }
-
-    // ── Withdraw ──────────────────────────────────────────────────────────────
 
     fun onWithdrawClicked() {
         val default = _state.value.defaultMethod
@@ -200,8 +199,6 @@ class ProviderEarningsViewModel @Inject constructor(
         }
     }
 
-    // ── Add method ────────────────────────────────────────────────────────────
-
     fun showAddMethodSheet() {
         _state.value = _state.value.copy(
             showWithdrawSheet  = false,
@@ -240,8 +237,6 @@ class ProviderEarningsViewModel @Inject constructor(
                 }
         }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun startOfWeek(now: Instant, tz: TimeZone): Instant {
         val today        = now.toLocalDateTime(tz).date

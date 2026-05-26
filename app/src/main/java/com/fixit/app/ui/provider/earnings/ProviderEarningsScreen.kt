@@ -33,6 +33,7 @@ import com.fixit.app.ui.components.ProviderTabBar
 import com.fixit.app.ui.provider.payment.AddPaymentMethodSheet
 import com.fixit.app.ui.provider.payment.WithdrawSelectSheet
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 import com.fixit.app.ui.util.formatMoney
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -57,6 +58,7 @@ fun ProviderEarningsScreen(
     var addLastFour    by remember { mutableStateOf("") }
     var addIsDefault   by remember { mutableStateOf(false) }
     var isAddSubmitting by remember { mutableStateOf(false) }
+    OnLifecycleStart(viewModel::refresh)
 
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->

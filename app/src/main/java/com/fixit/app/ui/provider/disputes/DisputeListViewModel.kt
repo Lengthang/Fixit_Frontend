@@ -40,7 +40,9 @@ class DisputeListViewModel @Inject constructor(
     private val _state = MutableStateFlow(DisputeListState())
     val state = _state.asStateFlow()
 
-    init { refresh() }
+    // First load + every subsequent ON_START refresh driven by the screen.
+    // Picking up status transitions made on DisputeDetailScreen happens here
+    // when the user pops back.
 
     fun refresh() {
         viewModelScope.launch {

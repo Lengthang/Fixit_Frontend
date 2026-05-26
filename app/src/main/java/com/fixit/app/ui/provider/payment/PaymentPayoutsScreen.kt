@@ -42,6 +42,7 @@ import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.IconBox
 import com.fixit.app.ui.components.ProviderTabBar
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.OnLifecycleStart
 import com.fixit.app.ui.util.formatMoney
 import java.math.BigDecimal
 import java.time.DayOfWeek
@@ -61,6 +62,7 @@ fun PaymentPayoutsScreen(
 ) {
     val state         by viewModel.state.collectAsState()
     val snackbarState = remember { SnackbarHostState() }
+    OnLifecycleStart(viewModel::refresh)
 
     // Collect one-shot effects
     LaunchedEffect(Unit) {

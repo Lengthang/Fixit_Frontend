@@ -21,7 +21,6 @@ data class ProviderCalendarState(
     val selectedDate: LocalDate = LocalDate.now(),
     private val allBookings: List<Booking> = emptyList(),
 ) {
-    /** Day-of-month integers within [month] that have at least one booking. */
     val bookedDates: Set<Int>
         get() {
             val tz = TimeZone.currentSystemDefault()
@@ -32,7 +31,6 @@ data class ProviderCalendarState(
                 .toSet()
         }
 
-    /** Bookings on [selectedDate], earliest first. */
     val bookingsForSelectedDate: List<Booking>
         get() {
             val tz = TimeZone.currentSystemDefault()
@@ -45,10 +43,6 @@ data class ProviderCalendarState(
                 }
                 .sortedBy { it.scheduledAt }
         }
-
-    // The "bookings" the screen reads from is allBookings, but the screen only
-    // references it via bookedDates / bookingsForSelectedDate which we already
-    // expose. The private field keeps the public surface tidy.
 }
 
 @HiltViewModel
@@ -59,7 +53,7 @@ class ProviderCalendarViewModel @Inject constructor(
     private val _state = MutableStateFlow(ProviderCalendarState())
     val state = _state.asStateFlow()
 
-    init { refresh() }
+    // First load + every subsequent ON_START refresh driven by the screen.
 
     fun selectDate(date: LocalDate) {
         _state.value = _state.value.copy(

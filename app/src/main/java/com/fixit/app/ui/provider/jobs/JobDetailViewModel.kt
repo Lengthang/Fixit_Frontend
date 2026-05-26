@@ -23,19 +23,11 @@ data class JobDetailState(
     val isMutating: Boolean = false,
     val errorMessage: String? = null,
     val booking: Booking? = null,
-    /**
-     * Server-computed earnings breakdown. Null while loading or if the
-     * payout endpoint failed (e.g. 403 because the user isn't the assigned
-     * provider). The screen falls back to gracefully rendering "—" in that
-     * case rather than computing commission on the client.
-     */
     val payout: BookingPayout? = null,
 )
 
 sealed interface JobDetailEffect {
-    /** Show a snackbar; user stays on the detail screen. */
     data class StatusUpdated(val message: String) : JobDetailEffect
-    /** Pop back to the previous screen (e.g. after decline/cancel/completion). */
     data object Dismiss : JobDetailEffect
 }
 
@@ -55,7 +47,7 @@ class JobDetailViewModel @Inject constructor(
     private val _effects = MutableSharedFlow<JobDetailEffect>()
     val effects = _effects.asSharedFlow()
 
-    init { refresh() }
+    // First load + every subsequent ON_START refresh driven by the screen.
 
     fun refresh() {
         viewModelScope.launch {
@@ -82,8 +74,6 @@ class JobDetailViewModel @Inject constructor(
         _state.value = _state.value.copy(errorMessage = null)
     }
 
-    // ── actions ──────────────────────────────────────────────────────────
-
     fun accept() = changeStatus(
         newStatus      = "in_progress",
         successMessage = "Job accepted",
@@ -96,11 +86,6 @@ class JobDetailViewModel @Inject constructor(
         dismissAfter   = true,
     )
 
-    /**
-     * No backend equivalent today — the action only appears for the CONFIRMED
-     * status which the backend never emits, so this is unreachable. Left as a
-     * no-op until staged-payment support lands in the booking state machine.
-     */
     fun markReadyForPayment() = Unit
 
     fun markJobDone() = changeStatus(
@@ -115,8 +100,6 @@ class JobDetailViewModel @Inject constructor(
             _state.value = _state.value.copy(isMutating = true, errorMessage = null)
             val outcome = runCatching {
                 paymentRepo.confirmCompletion(bookingId)
-                // Refresh both — confirmation may flip escrow holding→released,
-                // which means the payout numbers change from estimate to final.
                 loadBookingAndPayout()
             }
             outcome
@@ -150,8 +133,6 @@ class JobDetailViewModel @Inject constructor(
         dismissAfter   = true,
     )
 
-    // ── shared status-mutation pipeline ──────────────────────────────────
-
     private fun changeStatus(
         newStatus: String,
         successMessage: String,
@@ -162,11 +143,6 @@ class JobDetailViewModel @Inject constructor(
             _state.value = _state.value.copy(isMutating = true, errorMessage = null)
             val outcome = runCatching {
                 val updated = bookingRepo.updateStatus(bookingId, newStatus)
-                // Status transitions can flip escrow state too:
-                //  - cancel / decline → "refunded"
-                //  - confirm-completion path (handled in confirmCompletion) → "released"
-                // Refresh payout so the "Estimated/Paid out/Refunded" caption stays
-                // accurate. Tolerate failure: a stale payout is better than an error.
                 val payout = runCatching { bookingRepo.payoutFor(bookingId) }.getOrNull()
                 updated to payout
             }
@@ -189,10 +165,6 @@ class JobDetailViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Fetches booking + payout in parallel. Payout failure is swallowed so a
-     * 403 (rare) or 500 doesn't blank out the rest of the screen.
-     */
     private suspend fun loadBookingAndPayout(): Pair<Booking, BookingPayout?> =
         coroutineScope {
             val bookingDeferred = async { bookingRepo.byId(bookingId) }

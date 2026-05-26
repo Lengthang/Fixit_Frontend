@@ -51,7 +51,9 @@ class MyServicesViewModel @Inject constructor(
     private val _state = MutableStateFlow(MyServicesState())
     val state = _state.asStateFlow()
 
-    init { refresh() }
+    // First load + every subsequent ON_START refresh driven by the screen.
+    // This is what makes a newly-added or just-edited service appear when the
+    // user pops back from AddEditServiceScreen.
 
     fun refresh() {
         viewModelScope.launch {
@@ -88,12 +90,10 @@ class MyServicesViewModel @Inject constructor(
         val bookings         = bookingsDeferred.await().getOrNull().orEmpty()
         val wallet           = walletDeferred.await().getOrNull()
 
-        // Avg rating requires the provider profile id; skip gracefully if unavailable.
         val ratingSummary = runCatching {
             reviewRepo.summaryForProvider(provider.id)
         }.getOrNull()
 
-        // Build serviceId → bookingCount map from all booking line items.
         val bookingCountByServiceId: Map<String, Int> = bookings
             .flatMap { booking -> booking.items.map { item -> item.serviceId } }
             .groupingBy { it }
@@ -113,8 +113,6 @@ class MyServicesViewModel @Inject constructor(
             avgRating      = ratingSummary?.avgRating ?: 0.0,
         )
     }
-
-    // ── private mapping ──────────────────────────────────────────────────
 
     private fun ServiceResponse.toDomain(
         categoryName: String?,
