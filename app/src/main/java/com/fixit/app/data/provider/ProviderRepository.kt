@@ -7,4 +7,7 @@ import javax.inject.Singleton
 class ProviderRepository @Inject constructor(private val api: ProviderApi) {
     suspend fun register(body: ProviderRegisterRequest): ProviderResponse = api.register(body)
     suspend fun me(): ProviderResponse = api.me()
+
+    suspend fun updateProfile(body: ProviderUpdateRequest): ProviderResponse =
+        api.updateMe(body)
 }

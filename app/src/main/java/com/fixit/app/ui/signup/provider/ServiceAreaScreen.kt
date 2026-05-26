@@ -119,8 +119,12 @@ fun ServiceAreaScreen(
     }
 }
 
+/**
+ * Drag-aware 1..50 km slider. Exposed (no longer private) so
+ * EditProfileScreen reuses the same component instead of duplicating it.
+ */
 @Composable
-private fun RadiusSlider(value: Int, onValueChange: (Int) -> Unit) {
+fun RadiusSlider(value: Int, onValueChange: (Int) -> Unit) {
     var trackWidthPx by remember { mutableStateOf(1f) }
     val density = LocalDensity.current
     val fraction = (value - 1).coerceAtLeast(0) / 49f
@@ -160,12 +164,18 @@ private fun RadiusSlider(value: Int, onValueChange: (Int) -> Unit) {
 }
 
 // Tiny inline helper because we can't import a Modifier from within the file in one line nicely.
+// Stays private — only RadiusSlider needs it.
 private fun Modifier.onGloballyPositionedTrackWidth(report: (Int) -> Unit): Modifier =
     this.onGloballyPositioned { coordinates ->
         report(coordinates.size.width)
     }
+
+/**
+ * Static visual map background — roads + park/water rects on a pale blue
+ * canvas. Exposed (no longer private) so EditProfileScreen reuses it.
+ */
 @Composable
-private fun MapBackground() {
+fun MapBackground() {
     Canvas(Modifier.fillMaxSize().background(Color(0xFFE8EEF5))) {
         fun road(p: Path, width: Float) = drawPath(p, color = Color.White, style = Stroke(width = width))
         val w = size.width

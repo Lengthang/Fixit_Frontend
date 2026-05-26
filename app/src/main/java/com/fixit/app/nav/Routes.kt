@@ -29,6 +29,7 @@ object Routes {
     const val PROVIDER_PROFILE   = "provider/profile"
 
     // ── Provider sub-screens (off-tab) ──
+    const val PROVIDER_EDIT_PROFILE    = "provider/edit_profile"
     const val PROVIDER_EARNINGS        = "provider/earnings"
     const val PROVIDER_REVIEWS         = "provider/reviews"
     // ── Provider disputes ──

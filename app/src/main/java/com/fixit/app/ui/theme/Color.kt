@@ -17,4 +17,9 @@ object C {
     val Line = Color(0xFFE2E8F0)
     val Subtle = Color(0xFFF8FAFC)
     val Bg = Color(0xFFFFFFFF)
+
+    // ── New: used by EditProfileScreen ────────────────────────────────────
+    val Red = Color(0xFFDC2626)
+    val RedSoft = Color(0xFFFCD9C0)
+    val Green = Color(0xFF10B981)
 }

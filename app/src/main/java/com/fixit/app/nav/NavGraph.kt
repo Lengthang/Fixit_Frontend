@@ -50,7 +50,10 @@ import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import com.fixit.app.ui.provider.disputes.DisputeDetailScreen
 import com.fixit.app.ui.provider.disputes.DisputeListScreen
+import com.fixit.app.ui.provider.profile.EditProfileScreen
+
 private const val DEV_TAG = "DevAuth"
+private const val PROFILE_REFRESH_KEY = "profile_refresh"
 
 private fun describe(e: Throwable): String = when (e) {
     is HttpException -> {
@@ -297,9 +300,9 @@ fun FixItNavGraph(startDestination: String) {
             }
             ProviderProfileScreen(
                 onTabClick         = { nav.switchProviderTab(it) },
-                onEditProfile      = { /* TODO: edit profile screen */ },
+                onEditProfile      = {  nav.navigate(Routes.PROVIDER_EDIT_PROFILE) },
                 onServicesAndRates = { nav.navigate(Routes.PROVIDER_SERVICES) },
-                onPaymentAndPayouts = { nav.navigate(Routes.PROVIDER_EARNINGS) },
+                onPaymentAndPayouts = { nav.navigate(Routes.PROVIDER_PAYMENT_PAYOUTS) },
                 onReviews          = { nav.navigate(Routes.PROVIDER_REVIEWS) },
                 onDisputeHistory   = { nav.navigate(Routes.PROVIDER_DISPUTE_HISTORY) },  // ← NEW
                 onHelp             = { /* TODO: help & support */ },
@@ -308,7 +311,12 @@ fun FixItNavGraph(startDestination: String) {
         }
 
         // ── Provider sub-screens ──────────────────────────────────────────────
-
+        composable(Routes.PROVIDER_EDIT_PROFILE) {
+            EditProfileScreen(
+                onBack  = { nav.popBackStack() },
+                onSaved = { nav.popBackStack() },
+            )
+        }
         // Earnings (entry from Home → Withdraw button — stays as before)
         composable(Routes.PROVIDER_EARNINGS) {
             ProviderEarningsScreen(
