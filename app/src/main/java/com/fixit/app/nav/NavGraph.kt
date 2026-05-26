@@ -48,7 +48,8 @@ import com.fixit.app.ui.signup.provider.ServicesScreen
 import com.fixit.app.ui.welcome.WelcomeScreen
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
-
+import com.fixit.app.ui.provider.disputes.DisputeDetailScreen
+import com.fixit.app.ui.provider.disputes.DisputeListScreen
 private const val DEV_TAG = "DevAuth"
 
 private fun describe(e: Throwable): String = when (e) {
@@ -288,15 +289,19 @@ fun FixItNavGraph(startDestination: String) {
             val vm: ProviderProfileViewModel = hiltViewModel()
             val signedOut by vm.signedOut.collectAsState()
             LaunchedEffect(signedOut) {
-                if (signedOut) nav.navigate(Routes.WELCOME) { popUpTo(0) { inclusive = true } }
+                if (signedOut) {
+                    nav.navigate(Routes.WELCOME) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             }
             ProviderProfileScreen(
                 onTabClick         = { nav.switchProviderTab(it) },
                 onEditProfile      = { /* TODO: edit profile screen */ },
                 onServicesAndRates = { nav.navigate(Routes.PROVIDER_SERVICES) },
-                // ── Updated: now goes to the new Payment & Payouts hub ──
-                onPaymentAndPayouts = { nav.navigate(Routes.PROVIDER_PAYMENT_PAYOUTS) },
+                onPaymentAndPayouts = { nav.navigate(Routes.PROVIDER_EARNINGS) },
                 onReviews          = { nav.navigate(Routes.PROVIDER_REVIEWS) },
+                onDisputeHistory   = { nav.navigate(Routes.PROVIDER_DISPUTE_HISTORY) },  // ← NEW
                 onHelp             = { /* TODO: help & support */ },
                 viewModel          = vm,
             )
@@ -334,6 +339,27 @@ fun FixItNavGraph(startDestination: String) {
             ProviderReviewsScreen(
                 onBack     = { nav.popBackStack() },
                 onTabClick = { nav.switchProviderTab(it) },
+            )
+        }
+        // ── Provider dispute history ──────────────────────────────────────
+
+        composable(Routes.PROVIDER_DISPUTE_HISTORY) {
+            DisputeListScreen(
+                onBack          = { nav.popBackStack() },
+                onDisputeClick  = { id -> nav.navigate(Routes.providerDisputeDetail(id)) },
+                onTabClick      = { nav.switchProviderTab(it) },
+            )
+        }
+
+        composable(
+            Routes.PROVIDER_DISPUTE_DETAIL,
+            arguments = listOf(navArgument("disputeId") {
+                type     = NavType.StringType
+                nullable = false
+            }),
+        ) {
+            DisputeDetailScreen(
+                onBack = { nav.popBackStack() },
             )
         }
 

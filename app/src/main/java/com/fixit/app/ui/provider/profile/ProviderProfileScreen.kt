@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.HelpOutline
@@ -58,6 +59,7 @@ fun ProviderProfileScreen(
     onServicesAndRates: () -> Unit,
     onPaymentAndPayouts: () -> Unit,
     onReviews: () -> Unit,
+    onDisputeHistory: () -> Unit,
     onHelp: () -> Unit,
     viewModel: ProviderProfileViewModel = hiltViewModel()
 ) {
@@ -141,22 +143,19 @@ fun ProviderProfileScreen(
                     Modifier.padding(horizontal = 20.dp).padding(top = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    SettingRow(Icons.Filled.Person, "Edit profile", onClick = onEditProfile)
-                    SettingRow(Icons.Filled.Work, "Services & rates", onClick = onServicesAndRates)
-                    SettingRow(
-                        Icons.Filled.CreditCard,
-                        "Payment & payouts",
-                        onClick = onPaymentAndPayouts
-                    )
-                    SettingRow(Icons.Filled.Star, "Reviews", onClick = onReviews)
+                    SettingRow(Icons.Filled.Person,      "Edit profile",        onClick = onEditProfile)
+                    SettingRow(Icons.Filled.Work,        "Services & rates",    onClick = onServicesAndRates)
+                    SettingRow(Icons.Filled.CreditCard,  "Payment & payouts",   onClick = onPaymentAndPayouts)
+                    SettingRow(Icons.Filled.Star,        "Reviews",             onClick = onReviews)
+                    SettingRow(Icons.Filled.Balance,     "Dispute History",     onClick = onDisputeHistory)  // ← NEW
                     val statusBadge = when (state.user?.providerStatus) {
                         ProviderStatus.APPROVED -> "Verified"
                         ProviderStatus.PENDING  -> "Pending"
                         ProviderStatus.REJECTED -> "Rejected"
                         null -> null
                     }
-                    SettingRow(Icons.Filled.Security, "Verification", badge = statusBadge)
-                    SettingRow(Icons.Filled.HelpOutline, "Help & support", onClick = onHelp)
+                    SettingRow(Icons.Filled.Security,    "Verification", badge = statusBadge)
+                    SettingRow(Icons.Filled.HelpOutline, "Help & support",      onClick = onHelp)
                     SettingRow(
                         Icons.AutoMirrored.Filled.Logout,
                         "Sign out",

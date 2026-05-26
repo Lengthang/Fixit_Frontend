@@ -31,6 +31,13 @@ object Routes {
     // ── Provider sub-screens (off-tab) ──
     const val PROVIDER_EARNINGS        = "provider/earnings"
     const val PROVIDER_REVIEWS         = "provider/reviews"
+    // ── Provider disputes ──
+    /** Full dispute history list. */
+    const val PROVIDER_DISPUTE_HISTORY = "provider/disputes"
+    /** Single dispute detail — disputeId is a required nav arg. */
+    const val PROVIDER_DISPUTE_DETAIL  = "provider/disputes/{disputeId}"
+
+    fun providerDisputeDetail(disputeId: String) = "provider/disputes/$disputeId"
     const val PROVIDER_PAYMENT_PAYOUTS = "provider/payment_payouts"
     const val PROVIDER_WITHDRAW_CONFIRM = "provider/withdraw_confirm"
 
