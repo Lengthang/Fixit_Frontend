@@ -4,8 +4,11 @@ import com.fixit.app.data.auth.AuthApi
 import com.fixit.app.data.booking.BookingApi
 import com.fixit.app.data.category.CategoryApi
 import com.fixit.app.data.customer.CustomerApi
+import com.fixit.app.data.dispute.DisputeApi
+import com.fixit.app.data.location.LocationApi
 import com.fixit.app.data.network.AuthInterceptor
 import com.fixit.app.data.payment.PaymentApi
+import com.fixit.app.data.promo.PromoApi
 import com.fixit.app.data.provider.ProviderApi
 import com.fixit.app.data.review.ReviewApi
 import com.fixit.app.data.service.ServiceApi
@@ -22,8 +25,6 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import javax.inject.Singleton
-import com.fixit.app.data.dispute.DisputeApi
-import com.fixit.app.data.promo.PromoApi
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -63,4 +64,5 @@ object NetworkModule {
     @Provides @Singleton fun uploadApi(r: Retrofit): UploadApi     = r.create(UploadApi::class.java)
     @Provides @Singleton fun disputeApi(r: Retrofit): DisputeApi   = r.create(DisputeApi::class.java)
     @Provides @Singleton fun promoApi(r: Retrofit): PromoApi       = r.create(PromoApi::class.java)
+    @Provides @Singleton fun locationApi(r: Retrofit): LocationApi = r.create(LocationApi::class.java)
 }

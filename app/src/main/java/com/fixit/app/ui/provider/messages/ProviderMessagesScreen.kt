@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fixit.app.ui.components.Avatar
+import com.fixit.app.ui.components.CustomerTabBar
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.ProviderTabBar
 import com.fixit.app.ui.theme.C
@@ -58,7 +59,7 @@ fun ProviderMessagesScreen(
             MessageRow("David Kim", "DK", Color(0xFF8B5CF6), "Is today still good for the appointment?", "1d", unread = 1)
             MessageRow("Ana Soto", "AS", Color(0xFF10B981), "You: All done, thanks for booking!", "3d", unread = 0)
         }
-        ProviderTabBar(active = "messages", onTabClick = onTabClick)
+        CustomerTabBar(active = "messages", onTabClick = onTabClick)
     }
 }
 

@@ -57,6 +57,7 @@ import com.fixit.app.ui.customer.browse.CustomerProviderDetailScreen
 import com.fixit.app.ui.customer.dashboard.CustomerHomeScreen
 import com.fixit.app.ui.customer.messages.CustomerMessagesScreen
 import com.fixit.app.ui.customer.profile.CustomerProfileScreen
+import com.fixit.app.ui.customer.profile.CustomerProfileViewModel
 
 private const val DEV_TAG = "DevAuth"
 private const val PROFILE_REFRESH_KEY = "profile_refresh"
@@ -455,10 +456,31 @@ fun FixItNavGraph(startDestination: String) {
             CustomerBookingsScreen(onTabClick = { nav.switchCustomerTab(it) })
         }
         composable(Routes.CUSTOMER_MESSAGES) {
-            CustomerMessagesScreen(onTabClick = { nav.switchCustomerTab(it) })
+            CustomerMessagesScreen(
+                onTabClick    = { nav.switchCustomerTab(it) },
+                onMessageClick = { },
+            )
         }
         composable(Routes.CUSTOMER_PROFILE) {
-            CustomerProfileScreen(onTabClick = { nav.switchCustomerTab(it) })
+            val vm: CustomerProfileViewModel = hiltViewModel()
+            val signedOut by vm.signedOut.collectAsState()
+            LaunchedEffect(signedOut) {
+                if (signedOut) {
+                    nav.navigate(Routes.WELCOME) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+            CustomerProfileScreen(
+                onTabClick       = { nav.switchCustomerTab(it) },
+                onPersonalInfo   = { /* TODO: customer edit-profile screen */ },
+                onSavedAddresses = { /* TODO: saved addresses screen */ },
+                onPaymentMethods = { /* TODO: payment methods screen */ },
+                onPromos         = { /* TODO: promos & rewards screen */ },
+                onTopUp          = { /* TODO: wallet top-up flow */ },
+                onHelp           = { /* TODO: help & support */ },
+                viewModel        = vm,
+            )
         }
 
         // ── Customer sub-screens (placeholder destinations) ──

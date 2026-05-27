@@ -25,10 +25,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fixit.app.domain.model.ActivePromo
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.theme.FixItTheme
+import java.math.BigDecimal
 
 /**
  * Carousel of active promo banners with bottom-dot pagination. When [promos]
@@ -139,5 +142,33 @@ private fun PromoCard(
                 )
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun GreetingPreview() {
+
+    val samplePromos = listOf(
+        ActivePromo(
+            id = "1",
+            code = "SAVE25",
+            discountPercentage = BigDecimal("25"),
+            expiresAtIso = "2026-12-31T23:59:59Z"
+        ),
+        ActivePromo(
+            id = "2",
+            code = "WELCOME10",
+            discountPercentage = BigDecimal("10"),
+            expiresAtIso = null
+        )
+    )
+
+    FixItTheme {
+        PromoBanner(
+            promos = samplePromos,
+            onUseClick = {},
+            modifier = Modifier
+        )
     }
 }

@@ -2,14 +2,11 @@ package com.fixit.app.ui.provider.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.Check
@@ -34,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,16 +38,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.fixit.app.domain.model.ProviderStatus
 import com.fixit.app.ui.components.Avatar
 import com.fixit.app.ui.components.FixItScreen
-import com.fixit.app.ui.components.IconBox
 import com.fixit.app.ui.components.ProviderTabBar
+import com.fixit.app.ui.components.SettingRow
 import com.fixit.app.ui.theme.C
 import com.fixit.app.ui.util.OnLifecycleStart
 import com.fixit.app.ui.util.initialsFor
-import kotlin.let
-import kotlin.takeIf
-import kotlin.text.format
-import kotlin.text.isNotBlank
-import kotlin.text.uppercase
 
 @Composable
 fun ProviderProfileScreen(
@@ -148,7 +139,7 @@ fun ProviderProfileScreen(
                     SettingRow(Icons.Filled.Work,        "Services & rates",    onClick = onServicesAndRates)
                     SettingRow(Icons.Filled.CreditCard,  "Payment & payouts",   onClick = onPaymentAndPayouts)
                     SettingRow(Icons.Filled.Star,        "Reviews",             onClick = onReviews)
-                    SettingRow(Icons.Filled.Balance,     "Dispute History",     onClick = onDisputeHistory)  // ← NEW
+                    SettingRow(Icons.Filled.Balance,     "Dispute History",     onClick = onDisputeHistory)
                     val statusBadge = when (state.user?.providerStatus) {
                         ProviderStatus.APPROVED -> "Verified"
                         ProviderStatus.PENDING  -> "Pending"
@@ -199,63 +190,5 @@ private fun Stat(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = C.Ink)
         Text(label, fontSize = 11.sp, color = C.Slate, modifier = Modifier.padding(top = 1.dp))
-    }
-}
-
-@Composable
-private fun SettingRow(
-    icon: ImageVector,
-    label: String,
-    badge: String? = null,
-    danger: Boolean = false,
-    onClick: () -> Unit = {}
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
-            .border(1.dp, C.Line, RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        IconBox(bg = if (danger) Color(0xFFFEE2E2) else C.BlueSoft) {
-            Icon(
-                icon, null,
-                tint = if (danger) Color(0xFFDC2626) else C.Blue,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-        Text(
-            label,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (danger) Color(0xFFDC2626) else C.Ink,
-            modifier = Modifier.weight(1f)
-        )
-        if (badge != null) {
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(C.GreenSoft)
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    badge.uppercase(),
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = C.GreenText,
-                    letterSpacing = 0.3.sp
-                )
-            }
-        }
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            null,
-            tint = C.Mute,
-            modifier = Modifier.size(14.dp)
-        )
     }
 }
