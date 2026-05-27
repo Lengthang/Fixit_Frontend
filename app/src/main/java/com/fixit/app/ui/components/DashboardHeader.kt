@@ -7,12 +7,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -21,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,8 +38,11 @@ fun DashboardHeader(
     avatarColor: Color = C.Orange,
     dark: Boolean = false,
     bellDot: Boolean = false,
+    subtitle: String? = null,
+    subtitleLeadingIcon: ImageVector? = null,
+    onSubtitleClick: (() -> Unit)? = null,
     onAvatarClick: () -> Unit = {},
-    onNotificationsClick: () -> Unit = {}
+    onNotificationsClick: () -> Unit = {},
 ) {
     val fg = if (dark) Color.White else C.Ink
     val sub = if (dark) Color.White.copy(alpha = 0.75f) else C.Slate
@@ -47,21 +53,21 @@ fun DashboardHeader(
             .padding(horizontal = 20.dp)
             .padding(top = 12.dp, bottom = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(
             Modifier
                 .size(44.dp)
                 .clip(CircleShape)
                 .border(2.dp, Color.White, CircleShape)
-                .clickable { onAvatarClick() }
+                .clickable { onAvatarClick() },
         ) {
             Avatar(
                 initials = initials,
                 color = avatarColor,
                 size = 44,
                 fontSize = 16,
-                photoUrl = avatarUrl
+                photoUrl = avatarUrl,
             )
         }
 
@@ -72,8 +78,41 @@ fun DashboardHeader(
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = fg,
-                letterSpacing = (-0.3).sp
+                letterSpacing = (-0.3).sp,
             )
+            if (subtitle != null) {
+                Spacer(Modifier.size(2.dp))
+                Row(
+                    Modifier.then(
+                        if (onSubtitleClick != null) Modifier.clickable { onSubtitleClick() }
+                        else Modifier
+                    ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (subtitleLeadingIcon != null) {
+                        Icon(
+                            subtitleLeadingIcon,
+                            contentDescription = null,
+                            tint = sub,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Spacer(Modifier.size(3.dp))
+                    }
+                    Text(
+                        subtitle,
+                        fontSize = 11.5.sp,
+                        color = sub,
+                    )
+                    if (onSubtitleClick != null) {
+                        Icon(
+                            Icons.Filled.ArrowDropDown,
+                            contentDescription = null,
+                            tint = sub,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                }
+            }
         }
 
         Box(
@@ -82,13 +121,13 @@ fun DashboardHeader(
                 .clip(CircleShape)
                 .background(if (dark) Color.White.copy(alpha = 0.12f) else C.Subtle)
                 .clickable { onNotificationsClick() },
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Filled.Notifications,
                 contentDescription = "Notifications",
                 tint = fg,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
             )
             if (bellDot) {
                 Box(
@@ -98,7 +137,7 @@ fun DashboardHeader(
                         .size(8.dp)
                         .clip(CircleShape)
                         .background(C.Orange)
-                        .border(2.dp, if (dark) C.Blue else C.Subtle, CircleShape)
+                        .border(2.dp, if (dark) C.Blue else C.Subtle, CircleShape),
                 )
             }
         }

@@ -54,11 +54,33 @@ object Routes {
     const val JOB_DETAIL = "provider/jobs/{bookingId}"
     fun jobDetail(bookingId: String) = "provider/jobs/$bookingId"
 
+    // ── Customer main tabs ──
+    const val CUSTOMER_HOME     = "customer/home"
+    const val CUSTOMER_BOOKINGS = "customer/bookings"
+    const val CUSTOMER_MESSAGES = "customer/messages"
+    const val CUSTOMER_PROFILE  = "customer/profile"
+
+    // ── Customer sub-screens (off-tab placeholders) ──
+    const val CUSTOMER_SEARCH      = "customer/search"
+    const val CUSTOMER_FILTERS     = "customer/filters"
+    const val CUSTOMER_CATEGORIES  = "customer/categories"
+    const val CUSTOMER_PROVIDERS   = "customer/providers"
+    const val CUSTOMER_PROVIDERS_BY_CATEGORY = "customer/providers?categoryId={categoryId}&categoryName={categoryName}"
+    fun customerProvidersByCategory(categoryId: String, categoryName: String): String {
+        val encId   = java.net.URLEncoder.encode(categoryId, "UTF-8")
+        val encName = java.net.URLEncoder.encode(categoryName, "UTF-8")
+        return "customer/providers?categoryId=$encId&categoryName=$encName"
+    }
+
+    const val CUSTOMER_PROVIDER_DETAIL = "customer/provider/{providerId}"
+    fun customerProviderDetail(id: String) = "customer/provider/$id"
+
     const val PLACEHOLDER = "placeholder/{role}"
     fun placeholder(role: UserRole) = "placeholder/${role.api}"
 
     fun home(role: UserRole): String = when (role) {
         UserRole.PROVIDER -> PROVIDER_HOME
+        UserRole.CUSTOMER -> CUSTOMER_HOME
         else              -> placeholder(role)
     }
 
@@ -69,5 +91,13 @@ object Routes {
         "messages" -> PROVIDER_MESSAGES
         "profile"  -> PROVIDER_PROFILE
         else       -> PROVIDER_HOME
+    }
+
+    fun customerTab(tabId: String): String = when (tabId) {
+        "home"     -> CUSTOMER_HOME
+        "bookings" -> CUSTOMER_BOOKINGS
+        "messages" -> CUSTOMER_MESSAGES
+        "profile"  -> CUSTOMER_PROFILE
+        else       -> CUSTOMER_HOME
     }
 }

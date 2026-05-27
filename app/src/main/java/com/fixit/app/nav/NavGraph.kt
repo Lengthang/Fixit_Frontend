@@ -51,6 +51,12 @@ import retrofit2.HttpException
 import com.fixit.app.ui.provider.disputes.DisputeDetailScreen
 import com.fixit.app.ui.provider.disputes.DisputeListScreen
 import com.fixit.app.ui.provider.profile.EditProfileScreen
+import com.fixit.app.ui.customer.bookings.CustomerBookingsScreen
+import com.fixit.app.ui.customer.browse.CustomerBrowseScreen
+import com.fixit.app.ui.customer.browse.CustomerProviderDetailScreen
+import com.fixit.app.ui.customer.dashboard.CustomerHomeScreen
+import com.fixit.app.ui.customer.messages.CustomerMessagesScreen
+import com.fixit.app.ui.customer.profile.CustomerProfileScreen
 
 private const val DEV_TAG = "DevAuth"
 private const val PROFILE_REFRESH_KEY = "profile_refresh"
@@ -67,6 +73,14 @@ private fun NavHostController.switchProviderTab(tabId: String) {
     navigate(Routes.providerTab(tabId)) {
         launchSingleTop = true
         popUpTo(Routes.PROVIDER_HOME) { inclusive = false; saveState = true }
+        restoreState = true
+    }
+}
+/** Customer twin of switchProviderTab. */
+private fun NavHostController.switchCustomerTab(tabId: String) {
+    navigate(Routes.customerTab(tabId)) {
+        launchSingleTop = true
+        popUpTo(Routes.CUSTOMER_HOME) { inclusive = false; saveState = true }
         restoreState = true
     }
 }
@@ -417,6 +431,66 @@ fun FixItNavGraph(startDestination: String) {
                 onBack           = { nav.popBackStack() },
                 onActionCompleted = { nav.popBackStack() },
             )
+        }
+        // ── Customer tabs ──
+
+        composable(Routes.CUSTOMER_HOME) {
+            CustomerHomeScreen(
+                onTabClick = { nav.switchCustomerTab(it) },
+                onLocationClick = { /* TODO: open address picker */ },
+                onNotificationsClick = { /* TODO: notifications screen */ },
+                onSearchClick = { nav.navigate(Routes.CUSTOMER_SEARCH) },
+                onFilterClick = { nav.navigate(Routes.CUSTOMER_FILTERS) },
+                onSeeAllCategories = { nav.navigate(Routes.CUSTOMER_CATEGORIES) },
+                onCategoryClick = { cat ->
+                    nav.navigate(Routes.customerProvidersByCategory(cat.id, cat.name))
+                },
+                onSeeAllProviders = { nav.navigate(Routes.CUSTOMER_PROVIDERS) },
+                onProviderClick = { p -> nav.navigate(Routes.customerProviderDetail(p.id)) },
+                onProviderBookClick = { p -> nav.navigate(Routes.customerProviderDetail(p.id)) },
+            )
+        }
+
+        composable(Routes.CUSTOMER_BOOKINGS) {
+            CustomerBookingsScreen(onTabClick = { nav.switchCustomerTab(it) })
+        }
+        composable(Routes.CUSTOMER_MESSAGES) {
+            CustomerMessagesScreen(onTabClick = { nav.switchCustomerTab(it) })
+        }
+        composable(Routes.CUSTOMER_PROFILE) {
+            CustomerProfileScreen(onTabClick = { nav.switchCustomerTab(it) })
+        }
+
+        // ── Customer sub-screens (placeholder destinations) ──
+
+        composable(Routes.CUSTOMER_SEARCH) {
+            CustomerBrowseScreen(title = "Search", onBack = { nav.popBackStack() })
+        }
+        composable(Routes.CUSTOMER_FILTERS) {
+            CustomerBrowseScreen(title = "Filters", onBack = { nav.popBackStack() })
+        }
+        composable(Routes.CUSTOMER_CATEGORIES) {
+            CustomerBrowseScreen(title = "All categories", onBack = { nav.popBackStack() })
+        }
+        composable(Routes.CUSTOMER_PROVIDERS) {
+            CustomerBrowseScreen(title = "Providers near you", onBack = { nav.popBackStack() })
+        }
+        composable(
+            Routes.CUSTOMER_PROVIDERS_BY_CATEGORY,
+            arguments = listOf(
+                navArgument("categoryId")   { type = NavType.StringType },
+                navArgument("categoryName") { type = NavType.StringType },
+            ),
+        ) { entry ->
+            val name = entry.arguments?.getString("categoryName").orEmpty()
+            CustomerBrowseScreen(title = name.ifBlank { "Providers" }, onBack = { nav.popBackStack() })
+        }
+        composable(
+            Routes.CUSTOMER_PROVIDER_DETAIL,
+            arguments = listOf(navArgument("providerId") { type = NavType.StringType }),
+        ) { entry ->
+            val pid = entry.arguments?.getString("providerId").orEmpty()
+            CustomerProviderDetailScreen(providerId = pid, onBack = { nav.popBackStack() })
         }
 
         composable(

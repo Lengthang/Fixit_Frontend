@@ -23,6 +23,8 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import javax.inject.Singleton
 import com.fixit.app.data.dispute.DisputeApi
+import com.fixit.app.data.promo.PromoApi
+
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
@@ -59,5 +61,6 @@ object NetworkModule {
     @Provides @Singleton fun reviewApi(r: Retrofit): ReviewApi     = r.create(ReviewApi::class.java)
     @Provides @Singleton fun serviceApi(r: Retrofit): ServiceApi   = r.create(ServiceApi::class.java)
     @Provides @Singleton fun uploadApi(r: Retrofit): UploadApi     = r.create(UploadApi::class.java)
-    @Provides @Singleton fun disputeApi(r: Retrofit): DisputeApi   = r.create(DisputeApi::class.java)  // ← NEW
+    @Provides @Singleton fun disputeApi(r: Retrofit): DisputeApi   = r.create(DisputeApi::class.java)
+    @Provides @Singleton fun promoApi(r: Retrofit): PromoApi       = r.create(PromoApi::class.java)
 }

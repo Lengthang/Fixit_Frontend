@@ -76,16 +76,23 @@ data class ProviderResponse(
     @Json(name = "avg_rating")        val avgRating: Double = 0.0,
     @Json(name = "is_available")      val isAvailable: Boolean = true,
     val status: String = "pending",
-    /**
-     * The provider's registered service categories. Populated by
-     * GET /providers/me (added in the latest backend update). Used by
-     * AddEditServiceViewModel to restrict the category picker to
-     * categories the backend will accept.
-     */
     val categories: List<CategoryResponse> = emptyList(),
-    /**
-     * Weekly recurring availability. Eager-loaded by GET /providers/me;
-     * used by EditProfileScreen to pre-populate the day/time pickers.
-     */
     val availability: List<AvailabilityResponse> = emptyList(),
+)
+@JsonClass(generateAdapter = true)
+data class ProviderListItemResponse(
+    val id: String,
+    @Json(name = "user_id")           val userId: String,
+    val name: String? = null,
+    val bio: String? = null,
+    @Json(name = "profile_photo_url") val profilePhotoUrl: String? = null,
+    val location: String? = null,
+    @Json(name = "avg_rating")        val avgRating: Double = 0.0,
+    @Json(name = "is_available")      val isAvailable: Boolean = true,
+    @Json(name = "service_radius_km") val serviceRadiusKm: Int = 10,
+    @Json(name = "distance_km")       val distanceKm: Double? = null,
+    val categories: List<CategoryResponse> = emptyList(),
+    @Json(name = "years_experience")  val yearsExperience: Int = 0,
+    @Json(name = "min_price")         val minPrice: String? = null, // Decimal serialised as string
+    @Json(name = "review_count")      val reviewCount: Int = 0,
 )
