@@ -21,8 +21,6 @@ class ReviewRepository @Inject constructor(private val api: ReviewApi) {
         rating    = rating,
         comment   = comment,
         createdAt = parseInstantSafe(createdAt),
-        // ReviewOut doesn't include customer name / photo today.
-        // Will start populating once the backend joins users → reviews.
         customerName     = null,
         customerPhotoUrl = null,
     )

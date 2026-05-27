@@ -509,10 +509,17 @@ fun FixItNavGraph(startDestination: String) {
         }
         composable(
             Routes.CUSTOMER_PROVIDER_DETAIL,
-            arguments = listOf(navArgument("providerId") { type = NavType.StringType }),
-        ) { entry ->
-            val pid = entry.arguments?.getString("providerId").orEmpty()
-            CustomerProviderDetailScreen(providerId = pid, onBack = { nav.popBackStack() })
+            arguments = listOf(navArgument("providerId") {
+                type = NavType.StringType
+                nullable = false
+            }),
+        ) {
+            CustomerProviderDetailScreen(
+                onBack    = { nav.popBackStack() },
+                onTabClick = { /* TODO: customer tab bar — no destination yet */ },
+                onChat    = { /* TODO: messaging flow not built yet */ },
+                onBookNow = { /* TODO: customer booking flow not built yet */ },
+            )
         }
 
         composable(

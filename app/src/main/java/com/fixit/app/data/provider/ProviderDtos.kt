@@ -1,6 +1,7 @@
 package com.fixit.app.data.provider
 
 import com.fixit.app.data.category.CategoryResponse
+import com.fixit.app.data.service.ServiceResponse
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -95,4 +96,29 @@ data class ProviderListItemResponse(
     @Json(name = "years_experience")  val yearsExperience: Int = 0,
     @Json(name = "min_price")         val minPrice: String? = null, // Decimal serialised as string
     @Json(name = "review_count")      val reviewCount: Int = 0,
+)
+@JsonClass(generateAdapter = true)
+data class ProviderDetailResponse(
+    val id: String,
+    @Json(name = "user_id")             val userId: String,
+    val name: String? = null,
+    val bio: String? = null,
+    @Json(name = "profile_photo_url")   val profilePhotoUrl: String? = null,
+    @Json(name = "years_experience")    val yearsExperience: Int = 0,
+    val certification: String? = null,
+    @Json(name = "certification_url")   val certificationUrl: String? = null,
+    @Json(name = "national_id_url")     val nationalIdUrl: String? = null,
+    val location: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    @Json(name = "service_radius_km")   val serviceRadiusKm: Int = 10,
+    @Json(name = "avg_rating")          val avgRating: Double = 0.0,
+    @Json(name = "is_available")        val isAvailable: Boolean = true,
+    val status: String = "pending",
+    @Json(name = "created_at")          val createdAt: String? = null,
+    @Json(name = "distance_km")         val distanceKm: Double? = null,
+    @Json(name = "total_jobs_completed") val totalJobsCompleted: Int = 0,
+    val categories: List<CategoryResponse> = emptyList(),
+    val availability: List<AvailabilityResponse> = emptyList(),
+    val services: List<ServiceResponse> = emptyList(),
 )

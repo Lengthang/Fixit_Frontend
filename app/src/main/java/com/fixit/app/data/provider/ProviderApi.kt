@@ -4,6 +4,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 interface ProviderApi {
     @POST("providers/register")
@@ -23,4 +24,11 @@ interface ProviderApi {
         @Query("limit")        limit: Int = 20,
         @Query("offset")       offset: Int = 0,
     ): List<ProviderListItemResponse>
+
+    @GET("providers/{providerId}")
+    suspend fun byId(
+        @Path("providerId") providerId: String,
+        @Query("customer_lat") customerLat: Double? = null,
+        @Query("customer_lng") customerLng: Double? = null,
+    ): ProviderDetailResponse
 }

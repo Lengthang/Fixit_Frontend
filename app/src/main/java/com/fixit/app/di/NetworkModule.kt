@@ -8,6 +8,7 @@ import com.fixit.app.data.dispute.DisputeApi
 import com.fixit.app.data.location.LocationApi
 import com.fixit.app.data.network.AuthInterceptor
 import com.fixit.app.data.payment.PaymentApi
+import com.fixit.app.data.portfolio.PortfolioApi
 import com.fixit.app.data.promo.PromoApi
 import com.fixit.app.data.provider.ProviderApi
 import com.fixit.app.data.review.ReviewApi
@@ -65,4 +66,5 @@ object NetworkModule {
     @Provides @Singleton fun disputeApi(r: Retrofit): DisputeApi   = r.create(DisputeApi::class.java)
     @Provides @Singleton fun promoApi(r: Retrofit): PromoApi       = r.create(PromoApi::class.java)
     @Provides @Singleton fun locationApi(r: Retrofit): LocationApi = r.create(LocationApi::class.java)
+    @Provides @Singleton fun portfolioApi(r: Retrofit): PortfolioApi = r.create(PortfolioApi::class.java)
 }

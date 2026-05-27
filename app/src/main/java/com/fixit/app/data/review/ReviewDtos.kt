@@ -12,6 +12,8 @@ data class ReviewResponse(
     val rating: Int,
     val comment: String? = null,
     @Json(name = "created_at") val createdAt: String,
+    @Json(name = "customer_name")       val customerName: String? = null,
+    @Json(name = "customer_photo_url")  val customerPhotoUrl: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
