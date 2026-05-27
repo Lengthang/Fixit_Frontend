@@ -3,9 +3,11 @@ package com.fixit.app.data.booking
 import com.fixit.app.domain.model.Booking
 import com.fixit.app.domain.model.BookingCustomer
 import com.fixit.app.domain.model.BookingPayout
+import com.fixit.app.domain.model.BookingPhoto
 import com.fixit.app.domain.model.BookingService
 import com.fixit.app.domain.model.BookingStatus
 import com.fixit.app.domain.model.EscrowStatus
+import com.fixit.app.domain.model.PhotoKind
 import java.math.BigDecimal
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -43,8 +45,24 @@ internal fun BookingResponse.toDomain(): Booking = Booking(
             price           = BigDecimal.valueOf(totalAmount),
             durationMinutes = it.durationMinutes,
         )
-    }
+    },
+    photos       = photos.mapNotNull { it.toDomainOrNull() },
 )
+
+/**
+ * BookingPhotoResponse → domain BookingPhoto. Returns null when the server
+ * sends a kind we don't recognise so the UI can't accidentally render an
+ * unknown bucket.
+ */
+internal fun BookingPhotoResponse.toDomainOrNull(): BookingPhoto? {
+    val photoKind = PhotoKind.fromApi(kind) ?: return null
+    return BookingPhoto(
+        id         = id,
+        url        = url,
+        kind       = photoKind,
+        uploadedAt = parseInstantSafe(uploadedAt),
+    )
+}
 
 /**
  * BookingPayoutResponse → domain BookingPayout.

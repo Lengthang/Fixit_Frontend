@@ -1,13 +1,16 @@
 package com.fixit.app.ui.provider.jobs
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fixit.app.data.booking.BookingRepository
 import com.fixit.app.data.payment.PaymentRepository
+import com.fixit.app.data.upload.UploadRepository
 import com.fixit.app.domain.model.Booking
 import com.fixit.app.domain.model.BookingPayout
 import com.fixit.app.domain.model.BookingStatus
+import com.fixit.app.domain.model.PhotoKind
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -24,6 +27,18 @@ data class JobDetailState(
     val errorMessage: String? = null,
     val booking: Booking? = null,
     val payout: BookingPayout? = null,
+    /**
+     * Non-null while a before/after upload is in flight. The UI uses this to
+     * gate the correct slot (BEFORE → spinner over the before tile) and to
+     * disable the "Mark job done" button so the photo doesn't get orphaned
+     * if the state transitions before the upload completes.
+     */
+    val uploadingKind: PhotoKind? = null,
+    /**
+     * Non-null while a photo deletion is in flight. Holds the photo id so
+     * the corresponding tile can show a dimmed/loading appearance.
+     */
+    val deletingPhotoId: String? = null,
 )
 
 sealed interface JobDetailEffect {
@@ -35,6 +50,7 @@ sealed interface JobDetailEffect {
 class JobDetailViewModel @Inject constructor(
     private val bookingRepo: BookingRepository,
     private val paymentRepo: PaymentRepository,
+    private val uploadRepo: UploadRepository,
     savedState: SavedStateHandle,
 ) : ViewModel() {
 
@@ -133,12 +149,81 @@ class JobDetailViewModel @Inject constructor(
         dismissAfter   = true,
     )
 
+    // ── Before/after photo handling ──────────────────────────────────────
+
+    /**
+     * Two-step: upload bytes via /uploads/image → attach the returned URL
+     * to the booking via POST /bookings/{id}/photos. Refreshes the booking
+     * on success so `state.booking.photos` becomes the source of truth.
+     *
+     * Guards against concurrent uploads (uploadingKind != null) and against
+     * uploads while the screen is busy mutating status, since the server
+     * rejects attachments outside in_progress/awaiting_confirmation.
+     */
+    fun onPhotoPicked(uri: Uri, kind: PhotoKind) {
+        if (_state.value.uploadingKind != null) return
+        if (_state.value.isMutating) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(uploadingKind = kind, errorMessage = null)
+            val outcome = runCatching {
+                val url = uploadRepo.uploadImage(uri)
+                bookingRepo.addPhoto(bookingId, url, kind)
+                // Refresh so the embedded photo list (and any server-side
+                // ordering by uploaded_at) is what the UI renders.
+                bookingRepo.byId(bookingId)
+            }
+            outcome
+                .onSuccess { refreshed ->
+                    _state.value = _state.value.copy(
+                        booking = refreshed,
+                        uploadingKind = null,
+                    )
+                }
+                .onFailure { e ->
+                    _state.value = _state.value.copy(
+                        uploadingKind = null,
+                        errorMessage = e.message ?: "Couldn't add photo",
+                    )
+                }
+        }
+    }
+
+    /** Provider-only delete; server returns 204 on success. */
+    fun removePhoto(photoId: String) {
+        if (_state.value.deletingPhotoId != null) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(deletingPhotoId = photoId, errorMessage = null)
+            val outcome = runCatching {
+                bookingRepo.deletePhoto(bookingId, photoId)
+                bookingRepo.byId(bookingId)
+            }
+            outcome
+                .onSuccess { refreshed ->
+                    _state.value = _state.value.copy(
+                        booking = refreshed,
+                        deletingPhotoId = null,
+                    )
+                }
+                .onFailure { e ->
+                    _state.value = _state.value.copy(
+                        deletingPhotoId = null,
+                        errorMessage = e.message ?: "Couldn't remove photo",
+                    )
+                }
+        }
+    }
+
+    // ── shared status-mutation pipeline ──────────────────────────────────
+
     private fun changeStatus(
         newStatus: String,
         successMessage: String,
         dismissAfter: Boolean,
     ) {
         if (_state.value.isMutating) return
+        // Don't let "Mark job done" race a pending photo upload — the photo
+        // would never get attached (server rejects in non-editable status).
+        if (_state.value.uploadingKind != null) return
         viewModelScope.launch {
             _state.value = _state.value.copy(isMutating = true, errorMessage = null)
             val outcome = runCatching {

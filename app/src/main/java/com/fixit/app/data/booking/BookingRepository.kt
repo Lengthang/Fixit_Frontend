@@ -2,6 +2,8 @@ package com.fixit.app.data.booking
 
 import com.fixit.app.domain.model.Booking
 import com.fixit.app.domain.model.BookingPayout
+import com.fixit.app.domain.model.BookingPhoto
+import com.fixit.app.domain.model.PhotoKind
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,4 +36,42 @@ class BookingRepository @Inject constructor(private val api: BookingApi) {
      */
     suspend fun payoutFor(id: String): BookingPayout =
         api.payoutFor(id).toDomain()
+
+    /**
+     * Attach a previously-uploaded image URL to the booking as a
+     * before/after photo. Caller must have already pushed the bytes via
+     * UploadRepository.uploadImage and have the absolute URL in hand.
+     *
+     * Returns the newly-created photo (mapped to domain) so callers can
+     * optimistically append it without re-fetching, though refreshing the
+     * full booking afterwards is the simpler pattern most VMs use.
+     */
+    suspend fun addPhoto(bookingId: String, url: String, kind: PhotoKind): BookingPhoto {
+        val response = api.addPhoto(
+            id = bookingId,
+            body = BookingPhotoCreate(url = url, kind = kind.apiValue),
+        )
+        // Server just validated `kind`, so toDomainOrNull cannot reasonably
+        // return null here — but fall back to a manual construction rather
+        // than crashing on the unlikely null path.
+        return response.toDomainOrNull() ?: BookingPhoto(
+            id         = response.id,
+            url        = response.url,
+            kind       = kind,
+            uploadedAt = kotlin.time.Clock.System.now(),
+        )
+    }
+
+    /** Remove a photo from a booking. Provider-only (enforced server-side). */
+    suspend fun deletePhoto(bookingId: String, photoId: String) {
+        api.deletePhoto(bookingId, photoId)
+    }
+
+    /**
+     * Standalone photo list. Not used on JobDetailScreen (BookingResponse
+     * embeds the gallery) but exposed for screens that only need the
+     * photos — e.g. a future customer-side completion-review screen.
+     */
+    suspend fun photosFor(bookingId: String): List<BookingPhoto> =
+        api.listPhotos(bookingId).mapNotNull { it.toDomainOrNull() }
 }

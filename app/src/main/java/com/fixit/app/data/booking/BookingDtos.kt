@@ -29,6 +29,29 @@ data class BookingItemResponse(
     @Json(name = "duration_minutes") val durationMinutes: Int? = null,
 )
 
+/**
+ * One before/after job photo. Server-side this lives on a separate
+ * `booking_photos` row, but the BookingResponse embeds the list so the
+ * screen can render the gallery without a second round-trip.
+ *
+ * `kind` is the server's "before" or "after" string — mapped to the
+ * PhotoKind enum at the domain layer.
+ */
+@JsonClass(generateAdapter = true)
+data class BookingPhotoResponse(
+    val id: String,
+    val url: String,
+    val kind: String,
+    @Json(name = "uploaded_at") val uploadedAt: String,
+)
+
+/** Body for POST /bookings/{id}/photos. */
+@JsonClass(generateAdapter = true)
+data class BookingPhotoCreate(
+    val url: String,
+    val kind: String,  // "before" | "after"
+)
+
 @JsonClass(generateAdapter = true)
 data class BookingResponse(
     val id: String,
@@ -49,6 +72,7 @@ data class BookingResponse(
     val customer: BookingCustomerSummary? = null,
     val provider: BookingProviderUserSummary? = null,
     val items: List<BookingItemResponse> = emptyList(),
+    val photos: List<BookingPhotoResponse> = emptyList(),
 )
 
 @JsonClass(generateAdapter = true)

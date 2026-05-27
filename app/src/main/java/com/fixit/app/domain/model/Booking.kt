@@ -26,6 +26,7 @@ data class Booking(
     val distanceKm: Double? = null,
     val customer: BookingCustomer? = null,
     val service: BookingService? = null,
+    val photos: List<BookingPhoto> = emptyList(),
 )
 
 data class BookingCustomer(
@@ -39,6 +40,32 @@ data class BookingService(
     val price: BigDecimal,
     val durationMinutes: Int? = null,
 )
+
+/**
+ * A before/after job photo the provider attaches while the booking is
+ * in_progress or awaiting_confirmation. The image lives at `url`; `kind`
+ * disambiguates which slot it fills in the UI.
+ */
+data class BookingPhoto(
+    val id: String,
+    val url: String,
+    val kind: PhotoKind,
+    val uploadedAt: Instant,
+)
+
+/** "Before" vs. "after" — maps to the backend's lowercase strings. */
+enum class PhotoKind(val apiValue: String) {
+    BEFORE("before"),
+    AFTER("after");
+
+    companion object {
+        fun fromApi(api: String?): PhotoKind? = when (api) {
+            "before" -> BEFORE
+            "after"  -> AFTER
+            else     -> null
+        }
+    }
+}
 
 /**
  * Status the UI cares about. Some values (CONFIRMED, AWAITING_PAYMENT) have

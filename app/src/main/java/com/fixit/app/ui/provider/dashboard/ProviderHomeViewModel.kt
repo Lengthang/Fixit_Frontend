@@ -6,6 +6,7 @@ import com.fixit.app.data.booking.BookingRepository
 import com.fixit.app.data.booking.BookingResponse
 import com.fixit.app.data.customer.CustomerRepository
 import com.fixit.app.data.provider.ProviderRepository
+import com.fixit.app.data.review.ReviewRepository
 import com.fixit.app.data.wallet.WalletRepository
 import com.fixit.app.domain.model.DashboardStats
 import com.fixit.app.domain.model.JobRequest
@@ -24,6 +25,7 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import java.math.BigDecimal
+import java.math.RoundingMode
 import javax.inject.Inject
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -48,6 +50,7 @@ class ProviderHomeViewModel @Inject constructor(
     private val providerRepo: ProviderRepository,
     private val walletRepo: WalletRepository,
     private val bookingRepo: BookingRepository,
+    private val reviewRepo: ReviewRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProviderHomeState())
@@ -87,6 +90,9 @@ class ProviderHomeViewModel @Inject constructor(
         val provider = providerDeferred.await().getOrNull()
         val wallet   = walletDeferred.await().getOrNull()
         val bookings = bookingsDeferred.await().getOrNull().orEmpty()
+        val ratingSummary = provider?.id?.let { pid ->
+            runCatching { reviewRepo.summaryForProvider(pid) }.getOrNull()
+        }
 
         val now       = Clock.System.now()
         val tz        = TimeZone.currentSystemDefault()
@@ -102,9 +108,10 @@ class ProviderHomeViewModel @Inject constructor(
             providerStatus = ProviderStatus.fromApi(provider?.status),
             stats          = computeStats(
                 bookings   = bookings,
-                avgRating  = provider?.avgRating ?: 0.0,
-                now        = now,
-                tz         = tz,
+                ratingAverage     = ratingSummary?.avgRating ?: provider?.avgRating ?: 0.0,
+                ratingReviewCount = ratingSummary?.totalReviews ?: 0,
+                now               = now,
+                tz                = tz,
             ),
             newRequests    = bookings
                 .filter { it.status == STATUS_PENDING }
@@ -124,29 +131,54 @@ class ProviderHomeViewModel @Inject constructor(
 
     private fun computeStats(
         bookings: List<BookingResponse>,
-        avgRating: Double,
+        ratingAverage: Double,
+        ratingReviewCount: Int,
         now: Instant,
         tz: TimeZone,
     ): DashboardStats {
         val completed = bookings.filter { it.status == STATUS_COMPLETED }
         val weekStart = startOfWeek(now, tz)
+        val lastWeekStart = startOfPreviousWeek(now, tz)
 
-        val thisWeek = completed.filter { b ->
-            val whenDone = safeInstant(b.scheduledAt) ?: safeInstant(b.createdAt)
-            whenDone != null && whenDone >= weekStart
+        val thisWeek = mutableListOf<BookingResponse>()
+        val lastWeek = mutableListOf<BookingResponse>()
+        for (b in completed) {
+            val whenDone = safeInstant(b.scheduledAt) ?: safeInstant(b.createdAt) ?: continue
+            when {
+                whenDone >= weekStart     -> thisWeek += b
+                whenDone >= lastWeekStart -> lastWeek += b
+            }
         }
+
         val weekEarnings = thisWeek.fold(BigDecimal.ZERO) { acc, b ->
             acc.add(BigDecimal.valueOf(b.totalAmount))
+        }
+        val lastWeekEarnings = lastWeek.fold(BigDecimal.ZERO) { acc, b ->
+            acc.add(BigDecimal.valueOf(b.totalAmount))
+        }
+        val weekDeltaPercent: Int = when {
+            lastWeekEarnings.signum() == 0 && weekEarnings.signum() == 0 -> 0
+            lastWeekEarnings.signum() == 0                               -> 100
+            else -> weekEarnings.subtract(lastWeekEarnings)
+                .multiply(BigDecimal(100))
+                .divide(lastWeekEarnings, 0, RoundingMode.HALF_UP)
+                .toInt()
         }
 
         return DashboardStats(
             weekEarnings      = weekEarnings,
-            weekDeltaPercent  = 0,
+            weekDeltaPercent  = weekDeltaPercent,
             jobsDoneTotal     = completed.size,
             jobsDoneThisWeek  = thisWeek.size,
-            ratingAverage     = avgRating,
-            ratingReviewCount = 0,
+            ratingAverage     = ratingAverage,
+            ratingReviewCount = ratingReviewCount,
         )
+    }
+    private fun startOfPreviousWeek(now: Instant, tz: TimeZone): Instant {
+        val today: LocalDate = now.toLocalDateTime(tz).date
+        val daysSinceMonday  = today.dayOfWeek.ordinal.toLong()
+        val previousMonday   = today.minus(daysSinceMonday + 7, DateTimeUnit.DAY)
+        return previousMonday.atStartOfDayIn(tz)
     }
 
     private fun BookingResponse.toJobRequest(now: Instant): JobRequest {
