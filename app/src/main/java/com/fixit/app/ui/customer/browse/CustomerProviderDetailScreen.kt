@@ -1,5 +1,6 @@
 package com.fixit.app.ui.customer.browse
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +31,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +49,8 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -54,6 +61,7 @@ import com.fixit.app.domain.model.ProviderStatus
 import com.fixit.app.domain.model.RatingSummary
 import com.fixit.app.domain.model.Review
 import com.fixit.app.domain.model.Service
+import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.theme.C
 import com.fixit.app.ui.util.avatarColorFor
 import com.fixit.app.ui.util.initialsFor
@@ -73,11 +81,7 @@ fun CustomerProviderDetailScreen(
 ) {
     val state by viewModel.state.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(C.Subtle),
-    ) {
+    FixItScreen(bg = C.Subtle) {
         // ── Loading spinner while the very first detail fetch is in flight ──
         // Subsequent refreshes show stale data underneath rather than blanking.
         if (state.detail == null) {
@@ -132,12 +136,8 @@ fun CustomerProviderDetailScreen(
                         modifier = Modifier.padding(top = 8.dp),
                     )
 
-                    // Tag chips come from the provider's service titles. They
-                    // double as a "what they actually do" hint that's more
-                    // specific than the broad category names.
-                    val tagLabels = detail.services
-                        .filter { it.isActive }
-                        .map { it.title }
+                    val tagLabels = detail.categories
+                        .map { it.name }
                         .distinct()
                         .take(4)
                     if (tagLabels.isNotEmpty()) {
@@ -426,7 +426,6 @@ private fun ProIdentityCard(
                 //    floating verified-tick badge when the provider is approved).
                 Box(
                     modifier = Modifier
-                        .offset(y = (-52).dp)
                         .size(82.dp),
                 ) {
                     val seedName = detail.name?.takeIf { it.isNotBlank() } ?: "Provider"
@@ -741,6 +740,42 @@ private fun PpServiceCard(service: Service, onBook: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // ── Thumbnail ────────────────────────────────────────
+        // Falls back to a tinted placeholder when the service has no photo,
+        // so the row keeps its visual rhythm even for older records.
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(C.Green.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val img = service.imageUrl
+            if (!img.isNullOrBlank()) {
+                AsyncImage(
+                    model = img,
+                    contentDescription = service.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                // Simple diagonal-stripe placeholder, matches the mock.
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val stripe = 8.dp.toPx()
+                    var x = -size.height
+                    while (x < size.width) {
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.25f),
+                            start = Offset(x, size.height),
+                            end = Offset(x + size.height, 0f),
+                            strokeWidth = stripe / 2f,
+                        )
+                        x += stripe * 1.6f
+                    }
+                }
+            }
+        }
+
         Column(modifier = Modifier.weight(1f)) {
             Text(service.title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = C.Ink)
             service.description?.takeIf { it.isNotBlank() }?.let {
@@ -749,6 +784,8 @@ private fun PpServiceCard(service: Service, onBook: () -> Unit) {
                     fontSize = 11.5.sp,
                     color = C.Slate,
                     lineHeight = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 3.dp),
                 )
             }
@@ -776,15 +813,54 @@ private fun PpServiceCard(service: Service, onBook: () -> Unit) {
                 color = C.Orange,
                 letterSpacing = (-0.3).sp,
             )
-            Box(
+
+            // Local quantity state. `service.id` as the remember key so quantities
+            // reset cleanly if the list of services itself changes (e.g. switching
+            // providers in the same composition).
+            var quantity by remember(service.id) { mutableStateOf(0) }
+
+            Row(
                 modifier = Modifier
                     .padding(top = 6.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .border(1.5.dp, C.Blue, RoundedCornerShape(14.dp))
-                    .clickable { onBook() }
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                    .animateContentSize(), // smooth width animation on expand/collapse
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Book", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = C.Blue)
+                if (quantity == 0) {
+                    // Collapsed state — just the "+" button, same padding as the old Book button.
+                    Box(
+                        modifier = Modifier
+                            .clickable { quantity = 1 }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text("+", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = C.Blue)
+                    }
+                } else {
+                    // Expanded state — [−] [count] [+]
+                    Box(
+                        modifier = Modifier
+                            .clickable { quantity-- }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text("−", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = C.Blue)
+                    }
+                    Text(
+                        quantity.toString(),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = C.Ink,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.widthIn(min = 16.dp),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clickable { quantity++ }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text("+", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = C.Blue)
+                    }
+                }
             }
         }
     }

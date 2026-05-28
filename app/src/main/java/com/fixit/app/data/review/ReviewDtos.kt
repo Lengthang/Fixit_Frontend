@@ -4,6 +4,12 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
+data class ReviewCustomerSummary(
+    val id: String,
+    val name: String? = null,
+    @Json(name = "profile_photo_url") val profilePhotoUrl: String? = null,
+)
+@JsonClass(generateAdapter = true)
 data class ReviewResponse(
     val id: String,
     @Json(name = "booking_id") val bookingId: String,
@@ -14,6 +20,7 @@ data class ReviewResponse(
     @Json(name = "created_at") val createdAt: String,
     @Json(name = "customer_name")       val customerName: String? = null,
     @Json(name = "customer_photo_url")  val customerPhotoUrl: String? = null,
+    val customer: ReviewCustomerSummary? = null,
 )
 
 @JsonClass(generateAdapter = true)

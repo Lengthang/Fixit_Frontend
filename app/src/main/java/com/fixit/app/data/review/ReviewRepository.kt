@@ -21,8 +21,8 @@ class ReviewRepository @Inject constructor(private val api: ReviewApi) {
         rating    = rating,
         comment   = comment,
         createdAt = parseInstantSafe(createdAt),
-        customerName     = null,
-        customerPhotoUrl = null,
+        customerName     = customer?.name,
+        customerPhotoUrl = customer?.profilePhotoUrl,
     )
 
     private fun RatingSummaryResponse.toDomain(): RatingSummary = RatingSummary(
