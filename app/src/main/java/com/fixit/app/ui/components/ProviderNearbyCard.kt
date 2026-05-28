@@ -145,18 +145,13 @@ fun ProviderNearbyCard(
                     fontSize = 11.5.sp,
                     color = C.Slate,
                 )
-                Text(
-                    " (${provider.distanceKm})",
-                    fontSize = 11.5.sp,
-                    color = C.Slate,
-                )
-//                provider.distanceKm?.let { d ->
-//                    Text(
-//                        " · %.1f km".format(d),
-//                        fontSize = 11.5.sp,
-//                        color = C.Slate,
-//                    )
-//                }
+                provider.distanceKm?.let { d ->
+                    Text(
+                        " · %.1f km".format(d),
+                        fontSize = 11.5.sp,
+                        color = C.Slate,
+                    )
+                }
             }
         }
 
