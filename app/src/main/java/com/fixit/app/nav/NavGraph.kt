@@ -19,6 +19,7 @@ import com.fixit.app.dev.DevConfig
 import com.fixit.app.domain.model.UserRole
 import com.fixit.app.ui.auth.OtpScreen
 import com.fixit.app.ui.auth.PhoneEntryScreen
+import com.fixit.app.ui.customer.bookings.CustomerBookingDetailScreen
 import com.fixit.app.ui.placeholder.UserPlaceholderScreen
 import com.fixit.app.ui.provider.calendar.ProviderCalendarScreen
 import com.fixit.app.ui.provider.dashboard.ProviderHomeScreen
@@ -52,6 +53,8 @@ import com.fixit.app.ui.provider.disputes.DisputeDetailScreen
 import com.fixit.app.ui.provider.disputes.DisputeListScreen
 import com.fixit.app.ui.provider.profile.EditProfileScreen
 import com.fixit.app.ui.customer.bookings.CustomerBookingsScreen
+import com.fixit.app.ui.customer.bookings.LeaveReviewScreen
+import com.fixit.app.ui.customer.bookings.OpenDisputeScreen
 import com.fixit.app.ui.customer.browse.CustomerBrowseScreen
 import com.fixit.app.ui.customer.browse.CustomerProviderDetailScreen
 import com.fixit.app.ui.customer.dashboard.CustomerHomeScreen
@@ -453,8 +456,53 @@ fun FixItNavGraph(startDestination: String) {
         }
 
         composable(Routes.CUSTOMER_BOOKINGS) {
-            CustomerBookingsScreen(onTabClick = { nav.switchCustomerTab(it) })
+            CustomerBookingsScreen(
+                onTabClick         = { nav.switchCustomerTab(it) },
+                onBookingClick     = { bookingId ->
+                    nav.navigate(Routes.customerBookingDetail(bookingId))
+                },
+                onLeaveReviewClick = { bookingId ->
+                    nav.navigate(Routes.customerLeaveReview(bookingId))
+                },
+            )
         }
+        composable(
+            Routes.CUSTOMER_BOOKING_DETAIL,
+            arguments = listOf(navArgument("bookingId") {
+                type = NavType.StringType
+                nullable = false
+            }),
+        ) {
+            CustomerBookingDetailScreen(
+                onBack         = { nav.popBackStack() },
+                onOpenDispute  = { bookingId ->
+                    nav.navigate(Routes.customerOpenDispute(bookingId))
+                },
+                onLeaveReview  = { bookingId ->
+                    nav.navigate(Routes.customerLeaveReview(bookingId))
+                },
+            )
+        }
+        composable(
+            Routes.CUSTOMER_LEAVE_REVIEW,
+            arguments = listOf(navArgument("bookingId") {
+                type = NavType.StringType
+                nullable = false
+            }),
+        ) {
+            LeaveReviewScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(
+            Routes.CUSTOMER_OPEN_DISPUTE,
+            arguments = listOf(navArgument("bookingId") {
+                type = NavType.StringType
+                nullable = false
+            }),
+        ) {
+            OpenDisputeScreen(onBack = { nav.popBackStack() })
+        }
+
         composable(Routes.CUSTOMER_MESSAGES) {
             CustomerMessagesScreen(
                 onTabClick    = { nav.switchCustomerTab(it) },

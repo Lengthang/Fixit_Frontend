@@ -2,6 +2,8 @@ package com.fixit.app.domain.model
 
 import kotlinx.datetime.Instant
 import java.math.BigDecimal
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 
 /**
  * UI-friendly booking shape. The backend's BookingResponse has more fields
@@ -12,6 +14,9 @@ import java.math.BigDecimal
  * shown as their primary line in summary rows. Price reflects the whole
  * booking's total_amount so the customer-pays figure always matches the
  * backend's escrow total.
+ *
+ * `customer` is populated on every response — used by provider screens.
+ * `provider` is also populated on every response — used by customer screens.
  */
 data class Booking(
     val id: String,
@@ -22,17 +27,54 @@ data class Booking(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val notes: String? = null,
+    val subtotal: BigDecimal = BigDecimal.ZERO,
+    val discountAmount: BigDecimal = BigDecimal.ZERO,
     val totalAmount: BigDecimal = BigDecimal.ZERO,
+    val currency: String = "SGD",
     val distanceKm: Double? = null,
     val customer: BookingCustomer? = null,
+    val provider: BookingProvider? = null,
     val service: BookingService? = null,
     val photos: List<BookingPhoto> = emptyList(),
-)
+) {
+    /**
+     * Whether the signed-in customer can still cancel this booking, given the
+     * backend's CANCELLATION_BUFFER_HOURS rule.
+     *
+     * Backend rules (services/booking_service.py update_booking_status):
+     *  - pending: always cancellable by customer
+     *  - in_progress: only if (scheduled_at - now) > 24h
+     *  - any other status: not cancellable by customer
+     *
+     * The buffer constant is duplicated here intentionally — the server
+     * does not expose it via API, and replicating it client-side avoids a
+     * 403 round-trip when the user taps a button that has no chance of
+     * succeeding.
+     */
+    fun isCustomerCancellable(now: Instant = Clock.System.now()): Boolean = when (status) {
+        BookingStatus.PENDING     -> true
+        BookingStatus.IN_PROGRESS -> scheduledAt > now + CANCELLATION_BUFFER_HOURS.hours
+        else                      -> false
+    }
+
+    companion object {
+        /** Mirrors backend CANCELLATION_BUFFER_HOURS in services/booking_service.py. */
+        const val CANCELLATION_BUFFER_HOURS: Int = 24
+    }
+}
 
 data class BookingCustomer(
     val id: String,
     val name: String? = null,
     val profilePhotoUrl: String? = null,
+)
+
+/** Provider info embedded on a booking as seen from the customer's side. */
+data class BookingProvider(
+    val id: String,
+    val name: String? = null,
+    val profilePhotoUrl: String? = null,
+    val avgRating: Double = 0.0,
 )
 
 data class BookingService(

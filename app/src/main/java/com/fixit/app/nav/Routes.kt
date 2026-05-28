@@ -75,6 +75,18 @@ object Routes {
     const val CUSTOMER_PROVIDER_DETAIL = "customer/provider/{providerId}"
     fun customerProviderDetail(id: String) = "customer/provider/$id"
 
+    // ── Customer booking sub-screens ──
+    /** Single booking detail (customer view). */
+    const val CUSTOMER_BOOKING_DETAIL = "customer/booking/{bookingId}"
+    /** Form to leave a review for a completed booking. */
+    const val CUSTOMER_LEAVE_REVIEW   = "customer/booking/{bookingId}/review"
+    /** Form to raise a dispute on an awaiting-confirmation booking. */
+    const val CUSTOMER_OPEN_DISPUTE   = "customer/booking/{bookingId}/dispute"
+
+    fun customerBookingDetail(id: String) = "customer/booking/$id"
+    fun customerLeaveReview(id: String)   = "customer/booking/$id/review"
+    fun customerOpenDispute(id: String)   = "customer/booking/$id/dispute"
+
     const val PLACEHOLDER = "placeholder/{role}"
     fun placeholder(role: UserRole) = "placeholder/${role.api}"
 

@@ -1,6 +1,7 @@
 package com.fixit.app.ui.util
 
-
+import com.fixit.app.domain.model.Booking
+import com.fixit.app.domain.model.BookingStatus
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.math.BigDecimal
@@ -58,6 +59,55 @@ fun formatScheduled(
                 .replaceFirstChar { it.uppercase() }
             "$day, $month ${targetDate.dayOfMonth} · $time"
         }
+    }
+}
+
+/**
+ * Customer-bookings card meta line. Picks a phrasing per booking status:
+ *  - PENDING / IN_PROGRESS    → "Sun, Apr 21 · 1:00 PM"   (scheduled time)
+ *  - AWAITING_CONFIRMATION    → "Today · Finished 2:45 PM" (when the provider
+ *                                marked done — approximated by scheduledAt
+ *                                since the backend doesn't expose the exact
+ *                                completion timestamp on BookingResponse)
+ *  - COMPLETED                → "Apr 15 · Completed"       (no time, since
+ *                                history rows care about the date, not the hour)
+ *  - CANCELLED / DISPUTED     → falls back to formatScheduled
+ *
+ * Kept here rather than inside the screen because the same line is used by
+ * both CustomerBookingsScreen (rows) and CustomerBookingDetailScreen (header).
+ */
+fun formatBookingMeta(
+    booking: Booking,
+    tz: TimeZone = TimeZone.currentSystemDefault(),
+): String {
+    val nowDate    = Clock.System.now().toLocalDateTime(tz).date
+    val targetDate = booking.scheduledAt.toLocalDateTime(tz).date
+    val daysDiff   = targetDate.toEpochDays() - nowDate.toEpochDays()
+    val time       = formatTime(booking.scheduledAt, tz)
+
+    val dayLabel: String = when (daysDiff) {
+        0L  -> "Today"
+        1L  -> "Tomorrow"
+        -1L -> "Yesterday"
+        else -> {
+            val month = targetDate.month.name.take(3).lowercase()
+                .replaceFirstChar { it.uppercase() }
+            if (targetDate.year == nowDate.year) {
+                val dow = targetDate.dayOfWeek.name.take(3).lowercase()
+                    .replaceFirstChar { it.uppercase() }
+                "$dow, $month ${targetDate.dayOfMonth}"
+            } else {
+                "$month ${targetDate.dayOfMonth}, ${targetDate.year}"
+            }
+        }
+    }
+
+    return when (booking.status) {
+        BookingStatus.AWAITING_CONFIRMATION -> "$dayLabel · Finished $time"
+        BookingStatus.COMPLETED             -> "$dayLabel · Completed"
+        BookingStatus.CANCELLED             -> "$dayLabel · Cancelled"
+        BookingStatus.DISPUTED              -> "$dayLabel · In dispute"
+        else                                -> "$dayLabel · $time"
     }
 }
 

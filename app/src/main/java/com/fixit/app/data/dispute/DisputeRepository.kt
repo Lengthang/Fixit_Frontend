@@ -17,6 +17,30 @@ class DisputeRepository @Inject constructor(
     private val bookingApi: BookingApi,
 ) {
     /**
+     * Customer raises a dispute against an awaiting_confirmation booking.
+     * The server enforces:
+     *  - caller must be the customer on the booking
+     *  - booking.status must be "awaiting_confirmation"
+     *  - no existing dispute on this booking
+     * Returns the dispute id so the caller can navigate to a detail screen
+     * later if needed.
+     */
+    suspend fun raiseDispute(
+        bookingId: String,
+        reason: String,
+        imageUrls: List<String> = emptyList(),
+    ): String {
+        val response = disputeApi.raiseDispute(
+            DisputeCreateRequest(
+                bookingId = bookingId,
+                reason = reason,
+                reasonImageUrls = imageUrls,
+            )
+        )
+        return response.id
+    }
+
+    /**
      * Fetches all disputes for the signed-in provider, then enriches each one
      * with booking context (customer name, service title, scheduled time) via
      * parallel GET /bookings/{id} calls. Individual booking failures are

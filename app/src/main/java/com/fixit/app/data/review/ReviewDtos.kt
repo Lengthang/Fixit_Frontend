@@ -9,6 +9,7 @@ data class ReviewCustomerSummary(
     val name: String? = null,
     @Json(name = "profile_photo_url") val profilePhotoUrl: String? = null,
 )
+
 @JsonClass(generateAdapter = true)
 data class ReviewResponse(
     val id: String,
@@ -28,4 +29,12 @@ data class RatingSummaryResponse(
     @Json(name = "provider_id") val providerId: String,
     @Json(name = "avg_rating") val avgRating: Double = 0.0,
     @Json(name = "total_reviews") val totalReviews: Int = 0,
+)
+
+/** Body for POST /reviews/ */
+@JsonClass(generateAdapter = true)
+data class ReviewCreateRequest(
+    @Json(name = "booking_id") val bookingId: String,
+    val rating: Int,
+    val comment: String? = null,
 )

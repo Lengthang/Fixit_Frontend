@@ -4,6 +4,7 @@ import com.fixit.app.domain.model.Booking
 import com.fixit.app.domain.model.BookingCustomer
 import com.fixit.app.domain.model.BookingPayout
 import com.fixit.app.domain.model.BookingPhoto
+import com.fixit.app.domain.model.BookingProvider
 import com.fixit.app.domain.model.BookingService
 import com.fixit.app.domain.model.BookingStatus
 import com.fixit.app.domain.model.EscrowStatus
@@ -28,13 +29,24 @@ internal fun BookingResponse.toDomain(): Booking = Booking(
     latitude     = latitude,
     longitude    = longitude,
     notes        = notes,
+    subtotal     = BigDecimal.valueOf(subtotal),
+    discountAmount = BigDecimal.valueOf(discountAmount),
     totalAmount  = BigDecimal.valueOf(totalAmount),
+    currency     = currency,
     distanceKm   = distanceKm,
     customer     = customer?.let {
         BookingCustomer(
             id              = it.id,
             name            = it.name,
             profilePhotoUrl = it.profilePhotoUrl,
+        )
+    },
+    provider     = provider?.let {
+        BookingProvider(
+            id = it.id,
+            name = it.name,
+            profilePhotoUrl = it.profilePhotoUrl,
+            avgRating = it.avgRating,
         )
     },
     service      = items.firstOrNull()?.let {
@@ -48,7 +60,6 @@ internal fun BookingResponse.toDomain(): Booking = Booking(
     },
     photos       = photos.mapNotNull { it.toDomainOrNull() },
 )
-
 /**
  * BookingPhotoResponse → domain BookingPhoto. Returns null when the server
  * sends a kind we don't recognise so the UI can't accidentally render an

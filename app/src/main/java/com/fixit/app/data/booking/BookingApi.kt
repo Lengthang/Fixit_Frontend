@@ -8,6 +8,8 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 interface BookingApi {
+    @GET("bookings/my")
+    suspend fun myBookings(): List<BookingResponse>
     /** GET /bookings/provider — every booking assigned to the signed-in provider. */
     @GET("bookings/provider")
     suspend fun providerBookings(): List<BookingResponse>

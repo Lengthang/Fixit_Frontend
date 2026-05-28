@@ -9,7 +9,17 @@ import javax.inject.Singleton
 
 @Singleton
 class BookingRepository @Inject constructor(private val api: BookingApi) {
+    // ── Customer ─────────────────────────────────────────────────────────
 
+    /** Raw customer bookings. */
+    suspend fun myBookings(): List<BookingResponse> =
+        api.myBookings()
+
+    /** Customer bookings mapped to domain — preferred for screens. */
+    suspend fun myBookingsAsDomain(): List<Booking> =
+        api.myBookings().map { it.toDomain() }
+
+    // ── Provider ─────────────────────────────────────────────────────────
     /** Raw provider bookings (for VMs that compute their own derived data). */
     suspend fun providerBookings(): List<BookingResponse> =
         api.providerBookings()
