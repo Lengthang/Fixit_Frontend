@@ -51,6 +51,9 @@ import com.fixit.app.ui.util.avatarColorFor
 import com.fixit.app.ui.util.formatBookingMeta
 import com.fixit.app.ui.util.formatMoney
 import com.fixit.app.ui.util.initialsFor
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Icon
 
 @Composable
 fun CustomerBookingsScreen(
@@ -141,7 +144,16 @@ fun CustomerBookingsScreen(
                         )
                     }
 
-                else ->
+                else -> {
+                    val items = if (state.tab == BookingsTab.HISTORY) {
+                        state.visible.sortedWith(
+                            compareBy<Booking> { it.hasReview }
+                                .thenByDescending { it.scheduledAt }
+                        )
+                    } else {
+                        state.visible
+                    }
+
                     Column(
                         Modifier
                             .fillMaxSize()
@@ -150,7 +162,7 @@ fun CustomerBookingsScreen(
                             .padding(top = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        state.visible.forEach { booking ->
+                        items.forEach { booking ->
                             BookingCard(
                                 booking      = booking,
                                 isMutating   = state.mutatingId == booking.id,
@@ -162,6 +174,7 @@ fun CustomerBookingsScreen(
                         }
                         Spacer(Modifier.height(16.dp))
                     }
+                }
             }
         }
 
@@ -264,7 +277,11 @@ private fun BookingCard(
                         color = C.Ink,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    StatusBadge(customerBadgeKeyFor(booking.status))
+                    if (booking.status == BookingStatus.COMPLETED && booking.hasReview) {
+                        ReviewedBadge()
+                    } else {
+                        StatusBadge(customerBadgeKeyFor(booking.status))
+                    }
                 }
                 Text(
                     booking.service?.title ?: "Service",
@@ -377,13 +394,23 @@ private fun BookingActionRow(
                     onClick = onViewDetails,
                     modifier = Modifier.weight(1f),
                 )
-                CardButton(
-                    label = "Leave review",
-                    variant = CardButtonVariant.PRIMARY,
-                    enabled = true,
-                    onClick = onLeaveReviewClick,
-                    modifier = Modifier.weight(1f),
-                )
+                if (booking.hasReview) {
+                    CardButton(
+                        label = "View review",
+                        variant = CardButtonVariant.OUTLINE_BLUE,
+                        enabled = true,
+                        onClick = onLeaveReviewClick,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    CardButton(
+                        label = "Leave review",
+                        variant = CardButtonVariant.PRIMARY,
+                        enabled = true,
+                        onClick = onLeaveReviewClick,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
             BookingStatus.DISPUTED,
             BookingStatus.CANCELLED,
@@ -401,8 +428,7 @@ private fun BookingActionRow(
     }
 }
 
-private enum class CardButtonVariant { OUTLINE, PRIMARY, PRIMARY_SUCCESS, DESTRUCTIVE }
-
+private enum class CardButtonVariant { OUTLINE, OUTLINE_BLUE, PRIMARY, PRIMARY_SUCCESS, DESTRUCTIVE }
 @Composable
 private fun CardButton(
     label: String,
@@ -418,6 +444,9 @@ private fun CardButton(
     when (variant) {
         CardButtonVariant.OUTLINE -> {
             bg = Color.White; fg = C.Slate; borderColor = C.Line
+        }
+        CardButtonVariant.OUTLINE_BLUE -> {
+            bg = Color.White; fg = C.Blue; borderColor = C.Blue
         }
         CardButtonVariant.PRIMARY -> {
             bg = C.Blue; fg = Color.White; borderColor = null
@@ -469,4 +498,30 @@ internal fun customerBadgeKeyFor(status: BookingStatus): String = when (status) 
     BookingStatus.CANCELLED             -> "completed"
     BookingStatus.CONFIRMED,
     BookingStatus.AWAITING_PAYMENT      -> "upcoming"
+}
+
+@Composable
+private fun ReviewedBadge() {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(C.BlueSoft)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Star,
+            contentDescription = null,
+            tint = C.Blue,
+            modifier = Modifier.size(11.dp),
+        )
+        Text(
+            "REVIEWED",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = C.Blue,
+            letterSpacing = 0.4.sp,
+        )
+    }
 }

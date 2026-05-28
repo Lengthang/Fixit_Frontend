@@ -73,6 +73,7 @@ data class BookingResponse(
     val provider: BookingProviderUserSummary? = null,
     val items: List<BookingItemResponse> = emptyList(),
     val photos: List<BookingPhotoResponse> = emptyList(),
+    @Json(name = "has_review") val hasReview: Boolean = false,
 )
 
 @JsonClass(generateAdapter = true)

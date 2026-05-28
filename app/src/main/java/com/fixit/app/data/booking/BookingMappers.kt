@@ -59,6 +59,7 @@ internal fun BookingResponse.toDomain(): Booking = Booking(
         )
     },
     photos       = photos.mapNotNull { it.toDomainOrNull() },
+    hasReview    = hasReview,
 )
 /**
  * BookingPhotoResponse → domain BookingPhoto. Returns null when the server

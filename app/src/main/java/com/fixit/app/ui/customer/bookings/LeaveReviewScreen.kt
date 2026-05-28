@@ -92,7 +92,7 @@ fun LeaveReviewScreen(
                 modifier = Modifier.size(22.dp).clickable { onBack() },
             )
             Text(
-                "Leave a review",
+                if (state.isReadOnly) "Your review" else "Leave a review",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = C.Ink,
@@ -164,7 +164,7 @@ fun LeaveReviewScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                "How was your experience?",
+                                if (state.isReadOnly) "Your rating" else "How was your experience?",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = C.Ink,
@@ -175,11 +175,14 @@ fun LeaveReviewScreen(
                                     val filled = state.rating >= star
                                     Icon(
                                         imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                                        contentDescription = "Rate $star stars",
+                                        contentDescription = if (state.isReadOnly) null else "Rate $star stars",
                                         tint = if (filled) C.Orange else C.Line,
                                         modifier = Modifier
                                             .size(36.dp)
-                                            .clickable { viewModel.onRatingChange(star) },
+                                            .then(
+                                                if (state.isReadOnly) Modifier
+                                                else Modifier.clickable { viewModel.onRatingChange(star) }
+                                            ),
                                     )
                                 }
                             }
@@ -197,78 +200,104 @@ fun LeaveReviewScreen(
                         // Comment
                         Column {
                             Text(
-                                "Add a comment (optional)",
+                                if (state.isReadOnly) "Comment" else "Add a comment (optional)",
                                 fontSize = 13.sp,
                                 color = C.Slate,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(bottom = 8.dp),
                             )
-                            Column(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .border(1.5.dp, C.Line, RoundedCornerShape(12.dp))
-                                    .background(Color.White)
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                            ) {
-                                BasicTextField(
-                                    value = state.comment,
-                                    onValueChange = viewModel::onCommentChange,
-                                    textStyle = TextStyle(
-                                        color = C.Ink,
-                                        fontSize = 14.sp,
-                                        lineHeight = 20.sp,
-                                    ),
-                                    cursorBrush = SolidColor(C.Blue),
-                                    modifier = Modifier
+                            if (state.isReadOnly) {
+                                // Static display of the previously submitted comment. Empty
+                                // comments are valid server-side, so fall back to a placeholder
+                                // rather than hiding the section (keeps the layout stable).
+                                val text = state.comment.takeIf { it.isNotBlank() }
+                                Column(
+                                    Modifier
                                         .fillMaxWidth()
-                                        .defaultMinSize(minHeight = 120.dp),
-                                    decorationBox = { inner ->
-                                        if (state.comment.isEmpty()) {
-                                            Text(
-                                                "What went well? What could have been better?",
-                                                color = C.Mute,
-                                                fontSize = 14.sp,
-                                                lineHeight = 20.sp,
-                                            )
-                                        }
-                                        inner()
-                                    },
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .border(1.dp, C.Line, RoundedCornerShape(12.dp))
+                                        .background(C.Subtle)
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                ) {
+                                    Text(
+                                        text ?: "No comment was added.",
+                                        fontSize = 14.sp,
+                                        color = if (text != null) C.Ink else C.Mute,
+                                        lineHeight = 20.sp,
+                                    )
+                                }
+                            } else {
+                                Column(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .border(1.5.dp, C.Line, RoundedCornerShape(12.dp))
+                                        .background(Color.White)
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                ) {
+                                    BasicTextField(
+                                        value = state.comment,
+                                        onValueChange = viewModel::onCommentChange,
+                                        textStyle = TextStyle(
+                                            color = C.Ink,
+                                            fontSize = 14.sp,
+                                            lineHeight = 20.sp,
+                                        ),
+                                        cursorBrush = SolidColor(C.Blue),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .defaultMinSize(minHeight = 120.dp),
+                                        decorationBox = { inner ->
+                                            if (state.comment.isEmpty()) {
+                                                Text(
+                                                    "What went well? What could have been better?",
+                                                    color = C.Mute,
+                                                    fontSize = 14.sp,
+                                                    lineHeight = 20.sp,
+                                                )
+                                            }
+                                            inner()
+                                        },
+                                    )
+                                }
+                                Text(
+                                    "${state.comment.length}/2000",
+                                    fontSize = 11.sp,
+                                    color = C.Mute,
+                                    modifier = Modifier.padding(top = 6.dp),
                                 )
                             }
-                            Text(
-                                "${state.comment.length}/2000",
-                                fontSize = 11.sp,
-                                color = C.Mute,
-                                modifier = Modifier.padding(top = 6.dp),
-                            )
                         }
 
                         Spacer(Modifier.height(4.dp))
 
-                        // Submit button
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(if (state.canSubmit) C.Blue else C.Mute)
-                                .clickable(enabled = state.canSubmit) { viewModel.submit() },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (state.isSubmitting) {
-                                CircularProgressIndicator(
-                                    color = Color.White,
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            } else {
-                                Text(
-                                    "Submit review",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                )
+                        if (!state.isReadOnly) {
+                            Spacer(Modifier.height(4.dp))
+
+                            // Submit button
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(if (state.canSubmit) C.Blue else C.Mute)
+                                    .clickable(enabled = state.canSubmit) { viewModel.submit() },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (state.isSubmitting) {
+                                    CircularProgressIndicator(
+                                        color = Color.White,
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                } else {
+                                    Text(
+                                        "Submit review",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                    )
+                                }
                             }
                         }
                     }

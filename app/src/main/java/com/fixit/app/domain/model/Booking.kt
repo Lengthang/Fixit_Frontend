@@ -36,6 +36,7 @@ data class Booking(
     val provider: BookingProvider? = null,
     val service: BookingService? = null,
     val photos: List<BookingPhoto> = emptyList(),
+    val hasReview: Boolean = false,
 ) {
     /**
      * Whether the signed-in customer can still cancel this booking, given the
