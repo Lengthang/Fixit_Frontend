@@ -26,13 +26,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,10 +69,11 @@ import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.theme.C
 import com.fixit.app.ui.util.avatarColorFor
 import com.fixit.app.ui.util.initialsFor
+import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CustomerProviderDetailScreen(
     onBack: () -> Unit,
@@ -80,6 +85,14 @@ fun CustomerProviderDetailScreen(
     viewModel: CustomerProviderDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+
+    // Bottom sheet — purely transient UI state, kept screen-local so it
+    // doesn't pollute the VM (mirrors how ServiceDetailScreen.kt keeps
+    // `showDeleteDialog` local). Holds the service currently being viewed,
+    // null = sheet hidden.
+    var sheetService by remember { mutableStateOf<Service?>(null) }
+    val sheetState  = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetScope  = rememberCoroutineScope()
 
     FixItScreen(bg = C.Subtle) {
         // ── Loading spinner while the very first detail fetch is in flight ──
@@ -185,7 +198,13 @@ fun CustomerProviderDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             detail.activeServicesByPriceAsc.forEach { s ->
-                                PpServiceCard(s, onBook = { onBookNow() })
+                                PpServiceCard(
+                                    service     = s,
+                                    quantity    = state.quantities[s.id] ?: 0,
+                                    onIncrement = { viewModel.increment(s.id) },
+                                    onDecrement = { viewModel.decrement(s.id) },
+                                    onCardClick = { sheetService = s },
+                                )
                             }
                         }
                     }
@@ -200,14 +219,14 @@ fun CustomerProviderDetailScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         PpSectionHead("Reviews")
-                        if (totalReviews > 0) {
-                            Text(
-                                "See all $totalReviews",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = C.Blue,
-                            )
-                        }
+//                        if (totalReviews > 0) {
+//                            Text(
+//                                "See all $totalReviews",
+//                                fontSize = 12.sp,
+//                                fontWeight = FontWeight.SemiBold,
+//                                color = C.Blue,
+//                            )
+//                        }
                     }
                     Row(
                         modifier = Modifier
@@ -267,7 +286,7 @@ fun CustomerProviderDetailScreen(
                     Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp)) {
                         // Take the first 2 most-recent reviews (backend already
                         // orders by created_at desc — see review_service.py).
-                        state.reviews.take(2).forEachIndexed { idx, review ->
+                        state.reviews.forEachIndexed { idx, review ->
                             if (idx > 0) Spacer(modifier = Modifier.height(10.dp))
                             PpReviewCard(review, detail.services)
                         }
@@ -282,9 +301,38 @@ fun CustomerProviderDetailScreen(
         if (state.detail != null) {
             HorizontalDivider(color = C.Line)
             ProDetailFooter(
-                fromPrice = state.detail!!.lowestPrice,
-                onChat    = onChat,
-                onBookNow = onBookNow,
+                fromPrice    = state.detail!!.lowestPrice,
+                subtotal     = state.subtotal,
+                hasSelection = state.hasSelection,
+                totalItems   = state.totalItems,
+                onChat       = onChat,
+                onBookNow    = onBookNow,
+            )
+        }
+    }
+
+    // ── Service detail bottom sheet ─────────────────────────────────────
+    // Lives outside FixItScreen because ModalBottomSheet is a popup that
+    // attaches to the activity window, not the column layout above.
+    sheetService?.let { svc ->
+        ModalBottomSheet(
+            onDismissRequest = { sheetService = null },
+            sheetState       = sheetState,
+            containerColor   = Color.White,
+        ) {
+            PpServiceDetailSheet(
+                service     = svc,
+                quantity    = state.quantities[svc.id] ?: 0,
+                onIncrement = { viewModel.increment(svc.id) },
+                onDecrement = { viewModel.decrement(svc.id) },
+                onClose     = {
+                    // Hide animation completes, then we null out the host state
+                    // so the sheet recomposes cleanly the next time it opens.
+                    sheetScope.launch { sheetState.hide() }
+                        .invokeOnCompletion {
+                            if (!sheetState.isVisible) sheetService = null
+                        }
+                },
             )
         }
     }
@@ -730,10 +778,20 @@ private fun PpPortfolioTile(item: PortfolioItem) {
 // ── Service card ──────────────────────────────────────────────────────────────
 
 @Composable
-private fun PpServiceCard(service: Service, onBook: () -> Unit) {
+private fun PpServiceCard(
+    service: Service,
+    quantity: Int,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit,
+    onCardClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // Whole-card click opens the detail sheet. The +/− boxes below
+            // attach their own clickable, which Compose dispatches to the
+            // child first — so taps on the stepper never bubble up here.
+            .clickable { onCardClick() }
             .border(1.dp, C.Line, RoundedCornerShape(14.dp))
             .background(Color.White, RoundedCornerShape(14.dp))
             .padding(14.dp),
@@ -814,11 +872,8 @@ private fun PpServiceCard(service: Service, onBook: () -> Unit) {
                 letterSpacing = (-0.3).sp,
             )
 
-            // Local quantity state. `service.id` as the remember key so quantities
-            // reset cleanly if the list of services itself changes (e.g. switching
-            // providers in the same composition).
-            var quantity by remember(service.id) { mutableStateOf(0) }
-
+            // Stepper — quantity now flows down from VM state, so the
+            // booking footer can see the running total across all services.
             Row(
                 modifier = Modifier
                     .padding(top = 6.dp)
@@ -831,7 +886,7 @@ private fun PpServiceCard(service: Service, onBook: () -> Unit) {
                     // Collapsed state — just the "+" button, same padding as the old Book button.
                     Box(
                         modifier = Modifier
-                            .clickable { quantity = 1 }
+                            .clickable { onIncrement() }
                             .padding(horizontal = 10.dp, vertical = 5.dp),
                     ) {
                         Text("+", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = C.Blue)
@@ -840,7 +895,7 @@ private fun PpServiceCard(service: Service, onBook: () -> Unit) {
                     // Expanded state — [−] [count] [+]
                     Box(
                         modifier = Modifier
-                            .clickable { quantity-- }
+                            .clickable { onDecrement() }
                             .padding(horizontal = 10.dp, vertical = 5.dp),
                     ) {
                         Text("−", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = C.Blue)
@@ -855,12 +910,202 @@ private fun PpServiceCard(service: Service, onBook: () -> Unit) {
                     )
                     Box(
                         modifier = Modifier
-                            .clickable { quantity++ }
+                            .clickable { onIncrement() }
                             .padding(horizontal = 10.dp, vertical = 5.dp),
                     ) {
                         Text("+", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = C.Blue)
                     }
                 }
+            }
+        }
+    }
+}
+
+// ── Service detail bottom sheet ───────────────────────────────────────────────
+// Shown when the user taps anywhere on a service row in "Services & rates".
+// Reuses the same stepper visual language as PpServiceCard so the action
+// affordance stays consistent — adding here also bumps the subtotal in the
+// footer behind the sheet.
+
+@Composable
+private fun PpServiceDetailSheet(
+    service: Service,
+    quantity: Int,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+    ) {
+        // ── Hero image (or striped placeholder, matching the card thumbnail) ──
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(C.Green.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val img = service.imageUrl
+            if (!img.isNullOrBlank()) {
+                AsyncImage(
+                    model = img,
+                    contentDescription = service.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val stripe = 14.dp.toPx()
+                    var x = -size.height
+                    while (x < size.width) {
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.25f),
+                            start = Offset(x, size.height),
+                            end = Offset(x + size.height, 0f),
+                            strokeWidth = stripe / 2f,
+                        )
+                        x += stripe * 1.6f
+                    }
+                }
+            }
+        }
+
+        // ── Title + price row ─────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                service.title,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold,
+                color = C.Ink,
+                letterSpacing = (-0.3).sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                formatPrice(service.price),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = C.Orange,
+                letterSpacing = (-0.3).sp,
+            )
+        }
+
+        // ── Duration pill (only when the service exposes one) ─────────────
+        service.durationLabel?.let { label ->
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Canvas(modifier = Modifier.size(13.dp)) {
+                    val s = size.width / 24f
+                    drawCircle(C.Slate, 10f * s, center = Offset(12f * s, 12f * s), style = Stroke(2f * s))
+                    val hand = Path().apply { moveTo(12f * s, 6f * s); lineTo(12f * s, 12f * s); lineTo(16f * s, 14f * s) }
+                    drawPath(hand, C.Slate, style = Stroke(2f * s, cap = StrokeCap.Round))
+                }
+                Text(label, fontSize = 12.sp, color = C.Slate, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        // ── Description ───────────────────────────────────────────────────
+        val description = service.description?.takeIf { it.isNotBlank() }
+            ?: "No description provided for this service yet."
+        Text(
+            "Description",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = C.Ink,
+            modifier = Modifier.padding(top = 18.dp),
+        )
+        Text(
+            description,
+            fontSize = 13.sp,
+            color = C.Slate,
+            lineHeight = 21.sp,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+
+        HorizontalDivider(
+            color = C.Line,
+            modifier = Modifier.padding(vertical = 18.dp),
+        )
+
+        // ── Action row: stepper on the left, primary close button on the right ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(1.5.dp, C.Blue, RoundedCornerShape(14.dp))
+                    .animateContentSize(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (quantity == 0) {
+                    Box(
+                        modifier = Modifier
+                            .clickable { onIncrement() }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        Text(
+                            "Add  +",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = C.Blue,
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .clickable { onDecrement() }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                    ) {
+                        Text("−", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.Blue)
+                    }
+                    Text(
+                        quantity.toString(),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = C.Ink,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.widthIn(min = 20.dp),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clickable { onIncrement() }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                    ) {
+                        Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.Blue)
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(46.dp)
+                    .clip(RoundedCornerShape(23.dp))
+                    .background(C.Blue)
+                    .clickable { onClose() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (quantity == 0) "Done" else "Done · ${quantity} added",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
             }
         }
     }
@@ -975,10 +1220,21 @@ private fun PpReviewCard(review: Review, services: List<Service>) {
 }
 
 // ── Footer ────────────────────────────────────────────────────────────────────
+//
+// Two display modes, picked by `hasSelection`:
+//   1. Empty cart → "FROM / $X" on the left, plain "Book now →" pill on the right.
+//      (preserves the original look exactly when nothing's been added yet)
+//   2. Active cart → "SUBTOTAL / $XXX" on the left and "Book now · $XXX →"
+//      inside the pill. The subtotal appears in BOTH places per spec —
+//      the column label keeps the customer oriented while the pill itself
+//      doubles as the running total they'll be charged.
 
 @Composable
 private fun ProDetailFooter(
     fromPrice: BigDecimal?,
+    subtotal: BigDecimal,
+    hasSelection: Boolean,
+    totalItems: Int,
     onChat: () -> Unit,
     onBookNow: () -> Unit,
 ) {
@@ -990,49 +1246,62 @@ private fun ProDetailFooter(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(50.dp)
-                .clip(CircleShape)
-                .border(1.5.dp, C.Line, CircleShape)
-                .clickable { onChat() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Canvas(modifier = Modifier.size(20.dp)) {
-                val s = size.width / 24f
-                val path = Path().apply {
-                    moveTo(21f * s, 15f * s)
-                    lineTo(21f * s, 19f * s)
-                    cubicTo(21f * s, 20.1f * s, 20.1f * s, 21f * s, 19f * s, 21f * s)
-                    lineTo(7f * s, 21f * s)
-                    lineTo(3f * s, 25f * s)
-                    lineTo(3f * s, 5f * s)
-                    cubicTo(3f * s, 3.9f * s, 3.9f * s, 3f * s, 5f * s, 3f * s)
-                    lineTo(19f * s, 3f * s)
-                    cubicTo(20.1f * s, 3f * s, 21f * s, 3.9f * s, 21f * s, 5f * s)
-                    close()
-                }
-                drawPath(path, C.Blue, style = Stroke(2f * s, cap = StrokeCap.Round, join = StrokeJoin.Round))
-            }
-        }
+//        Box(
+//            modifier = Modifier
+//                .size(50.dp)
+//                .clip(CircleShape)
+//                .border(1.5.dp, C.Line, CircleShape)
+//                .clickable { onChat() },
+//            contentAlignment = Alignment.Center,
+//        ) {
+//            Canvas(modifier = Modifier.size(20.dp)) {
+//                val s = size.width / 24f
+//                val path = Path().apply {
+//                    moveTo(21f * s, 15f * s)
+//                    lineTo(21f * s, 19f * s)
+//                    cubicTo(21f * s, 20.1f * s, 20.1f * s, 21f * s, 19f * s, 21f * s)
+//                    lineTo(7f * s, 21f * s)
+//                    lineTo(3f * s, 25f * s)
+//                    lineTo(3f * s, 5f * s)
+//                    cubicTo(3f * s, 3.9f * s, 3.9f * s, 3f * s, 5f * s, 3f * s)
+//                    lineTo(19f * s, 3f * s)
+//                    cubicTo(20.1f * s, 3f * s, 21f * s, 3.9f * s, 21f * s, 5f * s)
+//                    close()
+//                }
+//                drawPath(path, C.Blue, style = Stroke(2f * s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+//            }
+//        }
 
-        Column {
-            Text(
-                "FROM",
-                fontSize = 10.5.sp,
-                color = C.Slate,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.4.sp,
-            )
-            Text(
-                fromPrice?.let { formatPrice(it) } ?: "—",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = C.Orange,
-                letterSpacing = (-0.3).sp,
-                lineHeight = 24.sp,
-            )
-        }
+//        Column {
+//            Text(
+//                if (hasSelection) "SUBTOTAL" else "FROM",
+//                fontSize = 10.5.sp,
+//                color = C.Slate,
+//                fontWeight = FontWeight.Medium,
+//                letterSpacing = 0.4.sp,
+//            )
+//            val leftPrice = if (hasSelection) {
+//                formatPrice(subtotal)
+//            } else {
+//                fromPrice?.let { formatPrice(it) } ?: "—"
+//            }
+//            Text(
+//                leftPrice,
+//                fontSize = 22.sp,
+//                fontWeight = FontWeight.ExtraBold,
+//                color = C.Orange,
+//                letterSpacing = (-0.3).sp,
+//                lineHeight = 24.sp,
+//            )
+//            if (hasSelection) {
+//                Text(
+//                    if (totalItems == 1) "1 item" else "$totalItems items",
+//                    fontSize = 10.5.sp,
+//                    color = C.Mute,
+//                    fontWeight = FontWeight.Medium,
+//                )
+//            }
+//        }
 
         Box(
             modifier = Modifier
@@ -1046,8 +1315,14 @@ private fun ProDetailFooter(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 14.dp),
             ) {
-                Text("Book now", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(
+                    if (hasSelection) "Book now · ${formatPrice(subtotal)}" else "Book now",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
                 Canvas(modifier = Modifier.size(14.dp)) {
                     val s = size.width / 24f
                     val stroke = Stroke(2.5f * s, cap = StrokeCap.Round, join = StrokeJoin.Round)

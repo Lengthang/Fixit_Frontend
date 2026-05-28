@@ -566,8 +566,11 @@ fun FixItNavGraph(startDestination: String) {
                 onBack    = { nav.popBackStack() },
                 onTabClick = { /* TODO: customer tab bar — no destination yet */ },
                 onChat    = { /* TODO: messaging flow not built yet */ },
-                onBookNow = { /* TODO: customer booking flow not built yet */ },
+                onBookNow = { nav.navigate(Routes.CUSTOMER_BOOKING_NEW) },
             )
+        }
+        composable(Routes.CUSTOMER_BOOKING_NEW) {
+            CustomerBrowseScreen(title = "Booking", onBack = { nav.popBackStack() })
         }
 
         composable(

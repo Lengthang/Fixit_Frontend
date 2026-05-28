@@ -76,6 +76,7 @@ object Routes {
     fun customerProviderDetail(id: String) = "customer/provider/$id"
 
     // ── Customer booking sub-screens ──
+    const val CUSTOMER_BOOKING_NEW    = "customer/booking/new"
     /** Single booking detail (customer view). */
     const val CUSTOMER_BOOKING_DETAIL = "customer/booking/{bookingId}"
     /** Form to leave a review for a completed booking. */

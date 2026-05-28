@@ -145,13 +145,18 @@ fun ProviderNearbyCard(
                     fontSize = 11.5.sp,
                     color = C.Slate,
                 )
-                provider.distanceKm?.let { d ->
-                    Text(
-                        " · %.1f km".format(d),
-                        fontSize = 11.5.sp,
-                        color = C.Slate,
-                    )
-                }
+                Text(
+                    " (${provider.distanceKm})",
+                    fontSize = 11.5.sp,
+                    color = C.Slate,
+                )
+//                provider.distanceKm?.let { d ->
+//                    Text(
+//                        " · %.1f km".format(d),
+//                        fontSize = 11.5.sp,
+//                        color = C.Slate,
+//                    )
+//                }
             }
         }
 
@@ -163,7 +168,7 @@ fun ProviderNearbyCard(
             provider.minPrice?.let { p ->
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        "FROM",
+                        "Price",
                         fontSize = 9.sp,
                         color = C.Mute,
                         fontWeight = FontWeight.SemiBold,

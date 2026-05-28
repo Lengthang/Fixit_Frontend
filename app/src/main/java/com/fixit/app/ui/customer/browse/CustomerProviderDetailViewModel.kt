@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.math.BigDecimal
 import javax.inject.Inject
 import kotlin.coroutines.resume
 
@@ -38,6 +39,12 @@ data class CustomerProviderDetailState(
     val summary: RatingSummary? = null,
     val reviews: List<Review> = emptyList(),
     val portfolio: List<PortfolioItem> = emptyList(),
+    /**
+     * Cart of service quantities, keyed by service id. Entries with qty == 0
+     * are pruned (see [CustomerProviderDetailViewModel.decrement]) so map
+     * iteration doubles as "what's actually selected".
+     */
+    val quantities: Map<String, Int> = emptyMap(),
 ) {
     /** Star rating → count of reviews with that rating. Always covers 1..5. */
     val distribution: Map<Int, Int>
@@ -50,6 +57,29 @@ data class CustomerProviderDetailState(
      */
     val isTopPro: Boolean
         get() = detail?.isTopPro(summary?.totalReviews ?: 0) == true
+
+    /**
+     * Running subtotal — Σ(price × qty) across every selected service.
+     * Calculated on the client purely for instant UI feedback; the server
+     * recomputes from the same source data via POST /bookings/price-preview
+     * when the customer actually proceeds to the booking flow.
+     */
+    val subtotal: BigDecimal
+        get() {
+            val servicesById = detail?.services?.associateBy { it.id } ?: return BigDecimal.ZERO
+            return quantities.entries.fold(BigDecimal.ZERO) { acc, (id, qty) ->
+                val service = servicesById[id] ?: return@fold acc
+                acc + service.price.multiply(BigDecimal(qty))
+            }
+        }
+
+    /** True when at least one service has a quantity above zero. */
+    val hasSelection: Boolean
+        get() = quantities.values.any { it > 0 }
+
+    /** Sum of quantities across all selected services — used for "X items" label. */
+    val totalItems: Int
+        get() = quantities.values.sum()
 }
 
 @HiltViewModel
@@ -83,6 +113,37 @@ class CustomerProviderDetailViewModel @Inject constructor(
                     _state.value = _state.value.copy(isLoading = false)
                 }
         }
+    }
+
+    /**
+     * Bump a service's quantity by one. No upper bound is enforced here —
+     * the backend's `min_quantity` constraint is the only hard limit (see
+     * booking_service.py), and that gets re-checked server-side at booking
+     * time, so we don't fight the user on the cart screen.
+     */
+    fun increment(serviceId: String) {
+        val current = _state.value
+        val newQty = (current.quantities[serviceId] ?: 0) + 1
+        _state.value = current.copy(
+            quantities = current.quantities + (serviceId to newQty),
+        )
+    }
+
+    /**
+     * Drop one off a service's quantity. When it hits zero we remove the key
+     * entirely so the map only ever holds genuinely-selected items —
+     * keeps `hasSelection` and `subtotal` cheap and obvious.
+     */
+    fun decrement(serviceId: String) {
+        val current = _state.value
+        val currentQty = current.quantities[serviceId] ?: 0
+        val newQty = (currentQty - 1).coerceAtLeast(0)
+        val newQuantities = if (newQty == 0) {
+            current.quantities - serviceId
+        } else {
+            current.quantities + (serviceId to newQty)
+        }
+        _state.value = current.copy(quantities = newQuantities)
     }
 
     private suspend fun loadAll() = coroutineScope {
