@@ -141,3 +141,32 @@ private val AVATAR_PALETTE = longArrayOf(
     0xFF06B6D4, // cyan
     0xFFEAB308, // amber
 )
+// ── Working-hours helpers ──────────────────────────────────────────────────
+// Storage stays canonical 24-hour "HH:MM" (what the backend's open_time/
+// close_time expect); these helpers convert to a 12-hour display string.
+
+/** Parses "HH:MM" or "HH:MM:SS" into (hour 0..23, minute 0..59). */
+fun parseHhMm(hhmm: String): Pair<Int, Int> {
+    val parts = hhmm.split(":")
+    val h = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 0
+    val m = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+    return h to m
+}
+
+/** Returns ("8:00", "AM") from (8, 0); ("12:00", "PM") from (12, 0); etc. */
+fun formatTwelveHour(hour24: Int, minute: Int): Pair<String, String> {
+    val period = if (hour24 < 12) "AM" else "PM"
+    val h12 = when {
+        hour24 == 0 -> 12
+        hour24 > 12 -> hour24 - 12
+        else        -> hour24
+    }
+    return "%d:%02d".format(h12, minute) to period
+}
+
+/** "08:00" → "8:00 AM", "18:00" → "6:00 PM". Accepts "HH:MM" or "HH:MM:SS". */
+fun formatHhMmTo12h(hhmm: String): String {
+    val (h, m) = parseHhMm(hhmm)
+    val (time, period) = formatTwelveHour(h, m)
+    return "$time $period"
+}

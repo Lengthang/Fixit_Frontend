@@ -28,6 +28,8 @@ data class SignupDraft(
     val yearsExperience: Int = 0,
     val availability: List<AvailabilitySlot> = emptyList(),
     val certification: String? = null,
+    val certificationUrl: String? = null,
+    val nationalIdUrl: String? = null,
     val payoutPreference: String = "bank",   // "bank" | "paypal" | "apple"
 )
 

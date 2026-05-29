@@ -1,5 +1,6 @@
 package com.fixit.app.ui.signup.provider
 
+import android.app.TimePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +31,8 @@ import com.fixit.app.ui.components.TopBar
 import com.fixit.app.ui.signup.AvailabilitySlot
 import com.fixit.app.ui.signup.SignupDraftViewModel
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.formatHhMmTo12h
+import com.fixit.app.ui.util.parseHhMm
 
 private val DAY_LABELS = listOf("M", "T", "W", "T", "F", "S", "S")
 private val DAY_NAMES  = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
@@ -64,11 +68,21 @@ fun ScheduleScreen(
         Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp)) {
             Text("Working hours", fontSize = 12.sp, color = C.Slate, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(10.dp))
-            // Times are static-display in your original screen; we keep that visual
-            // but bind to the real values from state.
+            // Times are editable: tap a box to open the system time picker.
+            // We store canonical 24h "HH:MM" in the VM but always display 12h.
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TimeBox(label = "Start", time = state.openTime, modifier = Modifier.weight(1f))
-                TimeBox(label = "End", time = state.closeTime, modifier = Modifier.weight(1f))
+                TimeBox(
+                    label = "Start",
+                    time = state.openTime,
+                    onChange = { vm.setOpen(it) },
+                    modifier = Modifier.weight(1f),
+                )
+                TimeBox(
+                    label = "End",
+                    time = state.closeTime,
+                    onChange = { vm.setClose(it) },
+                    modifier = Modifier.weight(1f),
+                )
             }
             Spacer(Modifier.height(16.dp))
             Row(
@@ -81,7 +95,7 @@ fun ScheduleScreen(
                     buildAnnotatedString {
                         append("You'll be shown as ")
                         withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("available") }
-                        append(" ${state.openTime}–${state.closeTime} on selected days.")
+                        append(" ${formatHhMmTo12h(state.openTime)} - ${formatHhMmTo12h(state.closeTime)} on selected days.")
                     },
                     fontSize = 12.5.sp, color = C.BlueDark, lineHeight = 18.sp,
                 )
@@ -120,14 +134,29 @@ private fun DayPill(label: String, active: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun TimeBox(label: String, time: String, modifier: Modifier = Modifier) {
+private fun TimeBox(
+    label: String,
+    time: String,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val (h, m) = parseHhMm(time)
+
     Column(
         modifier.clip(RoundedCornerShape(12.dp))
             .border(1.5.dp, C.Line, RoundedCornerShape(12.dp))
+            .clickable {
+                TimePickerDialog(
+                    context,
+                    { _, hr, mn -> onChange("%02d:%02d".format(hr, mn)) },
+                    h, m, false, // is24HourView = false → picker shows AM/PM
+                ).show()
+            }
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Text(label, fontSize = 11.sp, color = C.Mute)
         Spacer(Modifier.height(2.dp))
-        Text(time, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = C.Ink)
+        Text(formatHhMmTo12h(time), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = C.Ink)
     }
 }
