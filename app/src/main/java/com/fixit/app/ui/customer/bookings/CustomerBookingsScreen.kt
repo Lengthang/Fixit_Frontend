@@ -60,6 +60,7 @@ fun CustomerBookingsScreen(
     onTabClick: (String) -> Unit,
     onBookingClick: (bookingId: String) -> Unit,
     onLeaveReviewClick: (bookingId: String) -> Unit,
+    onOpenDisputeClick: (bookingId: String) -> Unit,
     viewModel: CustomerBookingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -170,6 +171,7 @@ fun CustomerBookingsScreen(
                                 onCancelClick = { pendingCancelId = booking.id },
                                 onConfirmClick = { viewModel.confirmCompletion(booking.id) },
                                 onLeaveReviewClick = { onLeaveReviewClick(booking.id) },
+                                onOpenDisputeClick = { onOpenDisputeClick(booking.id) },
                             )
                         }
                         Spacer(Modifier.height(16.dp))
@@ -239,6 +241,7 @@ private fun BookingCard(
     onCancelClick: () -> Unit,
     onConfirmClick: () -> Unit,
     onLeaveReviewClick: () -> Unit,
+    onOpenDisputeClick: () -> Unit,
 ) {
     val providerName = booking.provider?.name?.takeIf { it.isNotBlank() } ?: "Provider"
     val seed = booking.provider?.id ?: booking.id
@@ -313,6 +316,7 @@ private fun BookingCard(
             onCancelClick      = onCancelClick,
             onConfirmClick     = onConfirmClick,
             onLeaveReviewClick = onLeaveReviewClick,
+            onOpenDisputeClick = onOpenDisputeClick,
         )
     }
 }
@@ -325,6 +329,7 @@ private fun BookingActionRow(
     onCancelClick: () -> Unit,
     onConfirmClick: () -> Unit,
     onLeaveReviewClick: () -> Unit,
+    onOpenDisputeClick: () -> Unit,
 ) {
     val cancellable = booking.isCustomerCancellable()
 
@@ -371,10 +376,10 @@ private fun BookingActionRow(
             }
             BookingStatus.AWAITING_CONFIRMATION -> {
                 CardButton(
-                    label = "View details",
-                    variant = CardButtonVariant.OUTLINE,
+                    label = "Dispute",
+                    variant = CardButtonVariant.DESTRUCTIVE,
                     enabled = !isMutating,
-                    onClick = onViewDetails,
+                    onClick = onOpenDisputeClick,
                     modifier = Modifier.weight(1f),
                 )
                 CardButton(

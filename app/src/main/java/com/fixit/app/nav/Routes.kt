@@ -76,7 +76,7 @@ object Routes {
     fun customerProviderDetail(id: String) = "customer/provider/$id"
 
     // ── Customer booking sub-screens ──
-    const val CUSTOMER_BOOKING_NEW    = "customer/booking/new"
+    const val CUSTOMER_BOOKING_NEW    = "customer/booking/new/{providerId}?items={items}"
     /** Single booking detail (customer view). */
     const val CUSTOMER_BOOKING_DETAIL = "customer/booking/{bookingId}"
     /** Form to leave a review for a completed booking. */
@@ -90,7 +90,14 @@ object Routes {
 
     const val PLACEHOLDER = "placeholder/{role}"
     fun placeholder(role: UserRole) = "placeholder/${role.api}"
-
+    fun customerBookingNew(providerId: String, items: Map<String, Int>): String {
+        val encId = java.net.URLEncoder.encode(providerId, "UTF-8")
+        val cart = items.entries
+            .filter { it.value > 0 }
+            .joinToString(",") { "${it.key}:${it.value}" }
+        val encItems = java.net.URLEncoder.encode(cart, "UTF-8")
+        return "customer/booking/new/$encId?items=$encItems"
+    }
     fun home(role: UserRole): String = when (role) {
         UserRole.PROVIDER -> PROVIDER_HOME
         UserRole.CUSTOMER -> CUSTOMER_HOME

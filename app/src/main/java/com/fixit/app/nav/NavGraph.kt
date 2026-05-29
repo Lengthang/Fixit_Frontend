@@ -61,7 +61,7 @@ import com.fixit.app.ui.customer.dashboard.CustomerHomeScreen
 import com.fixit.app.ui.customer.messages.CustomerMessagesScreen
 import com.fixit.app.ui.customer.profile.CustomerProfileScreen
 import com.fixit.app.ui.customer.profile.CustomerProfileViewModel
-
+import com.fixit.app.ui.customer.booking.CustomerBookingScreen
 private const val DEV_TAG = "DevAuth"
 private const val PROFILE_REFRESH_KEY = "profile_refresh"
 
@@ -464,6 +464,9 @@ fun FixItNavGraph(startDestination: String) {
                 onLeaveReviewClick = { bookingId ->
                     nav.navigate(Routes.customerLeaveReview(bookingId))
                 },
+                onOpenDisputeClick = { bookingId ->
+                    nav.navigate(Routes.customerOpenDispute(bookingId))
+                },
             )
         }
         composable(
@@ -566,12 +569,40 @@ fun FixItNavGraph(startDestination: String) {
                 onBack    = { nav.popBackStack() },
                 onTabClick = { /* TODO: customer tab bar — no destination yet */ },
                 onChat    = { /* TODO: messaging flow not built yet */ },
-                onBookNow = { nav.navigate(Routes.CUSTOMER_BOOKING_NEW) },
+                onBookNow = { providerId, cart ->
+                    nav.navigate(Routes.customerBookingNew(providerId, cart))
+                },
             )
         }
-        composable(Routes.CUSTOMER_BOOKING_NEW) {
-            CustomerBrowseScreen(title = "Booking", onBack = { nav.popBackStack() })
+        composable(
+            Routes.CUSTOMER_BOOKING_NEW,
+            arguments = listOf(
+                navArgument("providerId") {
+                    type = NavType.StringType
+                    nullable = false
+                },
+                navArgument("items") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = ""
+                },
+            ),
+        ) {
+            CustomerBookingScreen(
+                onBack = { nav.popBackStack() },
+                onBooked = { bookingId ->
+                    // Land on the booking detail, dropping the booking form and
+                    // the provider detail from the back stack so "back" returns
+                    // the customer to where they were browsing.
+                    nav.navigate(Routes.customerBookingDetail(bookingId)) {
+                        popUpTo(Routes.CUSTOMER_PROVIDER_DETAIL) { inclusive = true }
+                    }
+                },
+            )
         }
+//        composable(Routes.CUSTOMER_BOOKING_NEW) {
+//            CustomerBrowseScreen(title = "Booking", onBack = { nav.popBackStack() })
+//        }
 
         composable(
             Routes.PLACEHOLDER,

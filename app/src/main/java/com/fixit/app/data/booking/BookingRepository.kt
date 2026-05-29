@@ -11,6 +11,52 @@ import javax.inject.Singleton
 class BookingRepository @Inject constructor(private val api: BookingApi) {
     // ── Customer ─────────────────────────────────────────────────────────
 
+    /**
+     * Create a booking. The cart's [items] all have to belong to the same
+     * provider (server-enforced). [scheduledAt] is an ISO local datetime with
+     * NO zone suffix — see [BookingCreateRequest.scheduledAt]. Pass exactly one
+     * location source: a [savedLocationId], or an inline [address] + coords.
+     *
+     * Returns the created booking mapped to domain; the server has already
+     * applied any promo discount, so [Booking.totalAmount] / discountAmount
+     * are authoritative.
+     */
+    suspend fun createBooking(
+        items: List<Pair<String, Int>>,          // serviceId → quantity
+        scheduledAt: String,
+        method: String,
+        savedLocationId: String? = null,
+        address: String? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        notes: String? = null,
+        promoCode: String? = null,
+    ): Booking = api.create(
+        BookingCreateRequest(
+            items = items.map { (id, qty) -> BookingItemInput(serviceId = id, quantity = qty) },
+            scheduledAt = scheduledAt,
+            savedLocationId = savedLocationId,
+            address = address,
+            latitude = latitude,
+            longitude = longitude,
+            notes = notes?.takeIf { it.isNotBlank() },
+            method = method,
+            promoCode = promoCode?.takeIf { it.isNotBlank() },
+        )
+    ).toDomain()
+
+    /**
+     * Server-authoritative cart subtotal. Does NOT apply promo codes — the
+     * discount is only computed at booking time inside escrow. Used by the
+     * booking screen to show a trustworthy "subtotal" before confirming.
+     */
+    suspend fun pricePreview(items: List<Pair<String, Int>>): PricePreviewResponse =
+        api.pricePreview(
+            PricePreviewRequest(
+                items = items.map { (id, qty) -> PricePreviewItemInput(serviceId = id, quantity = qty) },
+            )
+        )
+
     /** Raw customer bookings. */
     suspend fun myBookings(): List<BookingResponse> =
         api.myBookings()

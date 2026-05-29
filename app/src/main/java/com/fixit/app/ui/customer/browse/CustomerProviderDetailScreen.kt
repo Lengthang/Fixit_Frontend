@@ -79,7 +79,7 @@ fun CustomerProviderDetailScreen(
     onBack: () -> Unit,
     onTabClick: (String) -> Unit,
     onChat: () -> Unit = {},
-    onBookNow: () -> Unit = {},
+    onBookNow: (providerId: String, cart: Map<String, Int>) -> Unit = { _, _ -> },
     onShare: () -> Unit = {},
     onFavorite: () -> Unit = {},
     viewModel: CustomerProviderDetailViewModel = hiltViewModel(),
@@ -306,7 +306,7 @@ fun CustomerProviderDetailScreen(
                 hasSelection = state.hasSelection,
                 totalItems   = state.totalItems,
                 onChat       = onChat,
-                onBookNow    = onBookNow,
+                onBookNow    = { onBookNow(state.detail!!.id, state.quantities) },
             )
         }
     }

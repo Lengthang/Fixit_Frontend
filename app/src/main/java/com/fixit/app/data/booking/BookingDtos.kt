@@ -99,3 +99,74 @@ data class BookingPayoutResponse(
     @Json(name = "escrow_status") val escrowStatus: String,
     @Json(name = "is_estimate") val isEstimate: Boolean,
 )
+// ─────────────────────────────────────────────────────────────────────────────
+// Create booking — POST /bookings/
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One line in a create-booking cart. Mirrors `schemas.booking.BookingItemInput`. */
+@JsonClass(generateAdapter = true)
+data class BookingItemInput(
+    @Json(name = "service_id") val serviceId: String,
+    val quantity: Int,
+)
+
+/**
+ * Body for POST /bookings/. Mirrors `schemas.booking.BookingCreate`.
+ *
+ * Location comes from exactly one of two sources (validated server-side):
+ *   • a saved location — send [savedLocationId] only, or
+ *   • an inline address — send [address] + [latitude] + [longitude].
+ *
+ * `scheduledAt` is an ISO-8601 *local* datetime with no zone suffix
+ * (e.g. "2026-05-31T13:00:00"), because the backend reads the weekday and
+ * wall-clock time off it directly (strftime("%A") + .time()) to validate
+ * against the provider's availability window. Sending a Z/offset would shift
+ * the hour and can fail that check.
+ */
+@JsonClass(generateAdapter = true)
+data class BookingCreateRequest(
+    val items: List<BookingItemInput>,
+    @Json(name = "scheduled_at") val scheduledAt: String,
+    @Json(name = "saved_location_id") val savedLocationId: String? = null,
+    val address: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val notes: String? = null,
+    val method: String,                 // "card" | "bank" | "wallet"
+    @Json(name = "promo_code") val promoCode: String? = null,
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Price preview — POST /bookings/price-preview
+// ─────────────────────────────────────────────────────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class PricePreviewItemInput(
+    @Json(name = "service_id") val serviceId: String,
+    val quantity: Int,
+)
+
+@JsonClass(generateAdapter = true)
+data class PricePreviewRequest(
+    val items: List<PricePreviewItemInput>,
+)
+
+@JsonClass(generateAdapter = true)
+data class PricePreviewLineItemResponse(
+    @Json(name = "service_id") val serviceId: String,
+    val title: String,
+    @Json(name = "unit_price") val unitPrice: Double = 0.0,
+    val quantity: Int = 1,
+    @Json(name = "line_total") val lineTotal: Double = 0.0,
+    @Json(name = "duration_minutes") val durationMinutes: Int? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class PricePreviewResponse(
+    @Json(name = "provider_id") val providerId: String,
+    val currency: String = "SGD",
+    val items: List<PricePreviewLineItemResponse> = emptyList(),
+    val subtotal: Double = 0.0,
+    val total: Double = 0.0,
+    @Json(name = "estimated_duration_minutes") val estimatedDurationMinutes: Int? = null,
+)

@@ -8,6 +8,14 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 interface BookingApi {
+    /** POST /bookings/ — customer creates a booking and pays upfront (escrow hold). */
+    @POST("bookings/")
+    suspend fun create(@Body body: BookingCreateRequest): BookingResponse
+
+    /** POST /bookings/price-preview — server-authoritative cart subtotal (no promo). */
+    @POST("bookings/price-preview")
+    suspend fun pricePreview(@Body body: PricePreviewRequest): PricePreviewResponse
+
     @GET("bookings/my")
     suspend fun myBookings(): List<BookingResponse>
     /** GET /bookings/provider — every booking assigned to the signed-in provider. */
