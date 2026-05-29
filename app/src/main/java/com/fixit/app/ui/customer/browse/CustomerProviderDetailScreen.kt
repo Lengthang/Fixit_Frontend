@@ -1238,99 +1238,83 @@ private fun ProDetailFooter(
     onChat: () -> Unit,
     onBookNow: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.White)
             .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-//        Box(
-//            modifier = Modifier
-//                .size(50.dp)
-//                .clip(CircleShape)
-//                .border(1.5.dp, C.Line, CircleShape)
-//                .clickable { onChat() },
-//            contentAlignment = Alignment.Center,
-//        ) {
-//            Canvas(modifier = Modifier.size(20.dp)) {
-//                val s = size.width / 24f
-//                val path = Path().apply {
-//                    moveTo(21f * s, 15f * s)
-//                    lineTo(21f * s, 19f * s)
-//                    cubicTo(21f * s, 20.1f * s, 20.1f * s, 21f * s, 19f * s, 21f * s)
-//                    lineTo(7f * s, 21f * s)
-//                    lineTo(3f * s, 25f * s)
-//                    lineTo(3f * s, 5f * s)
-//                    cubicTo(3f * s, 3.9f * s, 3.9f * s, 3f * s, 5f * s, 3f * s)
-//                    lineTo(19f * s, 3f * s)
-//                    cubicTo(20.1f * s, 3f * s, 21f * s, 3.9f * s, 21f * s, 5f * s)
-//                    close()
-//                }
-//                drawPath(path, C.Blue, style = Stroke(2f * s, cap = StrokeCap.Round, join = StrokeJoin.Round))
-//            }
-//        }
 
-//        Column {
-//            Text(
-//                if (hasSelection) "SUBTOTAL" else "FROM",
-//                fontSize = 10.5.sp,
-//                color = C.Slate,
-//                fontWeight = FontWeight.Medium,
-//                letterSpacing = 0.4.sp,
-//            )
-//            val leftPrice = if (hasSelection) {
-//                formatPrice(subtotal)
-//            } else {
-//                fromPrice?.let { formatPrice(it) } ?: "—"
-//            }
-//            Text(
-//                leftPrice,
-//                fontSize = 22.sp,
-//                fontWeight = FontWeight.ExtraBold,
-//                color = C.Orange,
-//                letterSpacing = (-0.3).sp,
-//                lineHeight = 24.sp,
-//            )
-//            if (hasSelection) {
-//                Text(
-//                    if (totalItems == 1) "1 item" else "$totalItems items",
-//                    fontSize = 10.5.sp,
-//                    color = C.Mute,
-//                    fontWeight = FontWeight.Medium,
-//                )
-//            }
-//        }
-
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(50.dp)
-                .clip(RoundedCornerShape(25.dp))
-                .background(C.Blue)
-                .clickable { onBookNow() },
-            contentAlignment = Alignment.Center,
-        ) {
+        if (!hasSelection) {
             Row(
+                modifier = Modifier.padding(bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    if (hasSelection) "Book now · ${formatPrice(subtotal)}" else "Book now",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                )
+                // Small info dot — a filled circle with an "i", drawn to match
+                // the lightweight canvas-icon style used elsewhere on this screen.
                 Canvas(modifier = Modifier.size(14.dp)) {
                     val s = size.width / 24f
-                    val stroke = Stroke(2.5f * s, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    drawLine(Color.White, Offset(5f * s, 12f * s), Offset(19f * s, 12f * s), 2.5f * s, StrokeCap.Round)
-                    val arrowPath = Path().apply {
-                        moveTo(13f * s, 5f * s); lineTo(20f * s, 12f * s); lineTo(13f * s, 19f * s)
+                    drawCircle(C.Slate, 11f * s, Offset(12f * s, 12f * s), style = Stroke(2f * s))
+                    drawCircle(C.Slate, 1.6f * s, Offset(12f * s, 7.5f * s))
+                    drawLine(
+                        C.Slate,
+                        Offset(12f * s, 11f * s),
+                        Offset(12f * s, 17f * s),
+                        2f * s,
+                        StrokeCap.Round,
+                    )
+                }
+                Text(
+                    "Select a service to book",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = C.Slate,
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(25.dp))
+                    // Blue + tappable only when a service is selected; greyed and
+                    // inert otherwise. `enabled` on clickable swallows the tap so
+                    // an empty cart can never reach the booking screen.
+                    .background(if (hasSelection) C.Blue else C.Mute)
+                    .clickable(enabled = hasSelection) { onBookNow() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                ) {
+                    Text(
+                        if (hasSelection) "Book now · ${formatPrice(subtotal)}" else "Book now",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                    // Arrow only shows in the active state — a disabled CTA with
+                    // no affordance arrow reads more clearly as "not ready yet".
+                    if (hasSelection) {
+                        Canvas(modifier = Modifier.size(14.dp)) {
+                            val s = size.width / 24f
+                            val stroke = Stroke(2.5f * s, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                            drawLine(Color.White, Offset(5f * s, 12f * s), Offset(19f * s, 12f * s), 2.5f * s, StrokeCap.Round)
+                            val arrowPath = Path().apply {
+                                moveTo(13f * s, 5f * s); lineTo(20f * s, 12f * s); lineTo(13f * s, 19f * s)
+                            }
+                            drawPath(arrowPath, Color.White, style = stroke)
+                        }
                     }
-                    drawPath(arrowPath, Color.White, style = stroke)
                 }
             }
         }
