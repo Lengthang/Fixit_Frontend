@@ -113,13 +113,15 @@ fun ProviderNearbyCard(
                     fontWeight = FontWeight.Bold,
                     color = C.Ink,
                 )
-                Spacer(Modifier.size(4.dp))
-                Icon(
-                    Icons.Filled.CheckCircle,
-                    contentDescription = "Verified",
-                    tint = C.Blue,
-                    modifier = Modifier.size(12.dp),
-                )
+                if (provider.isVerified) {
+                    Spacer(Modifier.size(4.dp))
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = "Verified",
+                        tint = C.Blue,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
             }
             Text(
                 buildProviderSubtitle(provider),

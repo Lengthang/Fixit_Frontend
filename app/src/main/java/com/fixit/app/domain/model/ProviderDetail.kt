@@ -45,6 +45,7 @@ data class ProviderDetail(
     val avgRating: Double,
     val isAvailable: Boolean,
     val status: ProviderStatus?,
+    val isVerified: Boolean,
     val distanceKm: Double?,
     val totalJobsCompleted: Int,
     val categories: List<CategoryRef>,

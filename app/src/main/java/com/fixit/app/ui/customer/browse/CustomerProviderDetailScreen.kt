@@ -502,7 +502,7 @@ private fun ProIdentityCard(
                             )
                         }
                     }
-                    if (detail.status == ProviderStatus.APPROVED) {
+                    if (detail.status == ProviderStatus.APPROVED && detail.isVerified) {
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
@@ -584,7 +584,7 @@ private fun ProIdentityCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                if (detail.status == ProviderStatus.APPROVED) {
+                if (detail.status == ProviderStatus.APPROVED && detail.isVerified) {
                     PpChip("Verified", C.Blue, shieldIcon = true)
                 }
                 if (isTopPro) {

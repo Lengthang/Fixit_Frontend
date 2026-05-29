@@ -70,6 +70,7 @@ class ProviderRepository @Inject constructor(private val api: ProviderApi) {
             avgRating = avgRating,
             isAvailable = isAvailable,
             status = ProviderStatus.fromApi(status),
+            isVerified = isVerified,
             distanceKm = distanceKm,
             totalJobsCompleted = totalJobsCompleted,
             categories = categoryRefs,
@@ -119,4 +120,5 @@ private fun ProviderListItemResponse.toDomain(): NearbyProvider = NearbyProvider
     yearsExperience = yearsExperience,
     minPrice = minPrice?.let { runCatching { BigDecimal(it) }.getOrNull() },
     primaryCategoryName = categories.firstOrNull()?.name,
+    isVerified = isVerified,
 )

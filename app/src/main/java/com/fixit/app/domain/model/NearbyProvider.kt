@@ -20,6 +20,7 @@ data class NearbyProvider(
     val minPrice: BigDecimal?,
     /** First category name — used as the "Plumber" / "Electrician" subtitle. */
     val primaryCategoryName: String?,
+    val isVerified: Boolean,
 ) {
     /**
      * TOP PRO derivation (client-side per implementation decision):

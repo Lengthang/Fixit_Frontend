@@ -96,6 +96,7 @@ data class ProviderListItemResponse(
     @Json(name = "years_experience")  val yearsExperience: Int = 0,
     @Json(name = "min_price")         val minPrice: String? = null, // Decimal serialised as string
     @Json(name = "review_count")      val reviewCount: Int = 0,
+    @Json(name = "is_verified")       val isVerified: Boolean = false,
 )
 @JsonClass(generateAdapter = true)
 data class ProviderDetailResponse(
@@ -115,6 +116,7 @@ data class ProviderDetailResponse(
     @Json(name = "avg_rating")          val avgRating: Double = 0.0,
     @Json(name = "is_available")        val isAvailable: Boolean = true,
     val status: String = "pending",
+    @Json(name = "is_verified")         val isVerified: Boolean = false,
     @Json(name = "created_at")          val createdAt: String? = null,
     @Json(name = "distance_km")         val distanceKm: Double? = null,
     @Json(name = "total_jobs_completed") val totalJobsCompleted: Int = 0,
