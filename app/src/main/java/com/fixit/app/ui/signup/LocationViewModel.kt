@@ -1,14 +1,12 @@
 package com.fixit.app.ui.signup
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Geocoder
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fixit.app.data.location.LocationFix
 import com.fixit.app.data.location.LocationRepository
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
+import com.fixit.app.domain.model.UserRole
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -17,11 +15,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import javax.inject.Inject
-import kotlin.coroutines.resume
 
 data class SignupLocationState(
     val locating: Boolean = false,
@@ -35,23 +31,30 @@ data class SignupLocationState(
 }
 
 sealed interface SignupLocationEffect {
-    /** Location saved (or intentionally skipped) — safe to advance. */
+    /** Location resolved/stored (or intentionally skipped) — safe to advance. */
     data object Done : SignupLocationEffect
 }
 
 /**
- * Backs the customer signup [LocationScreen]. Resolves a GPS fix via
- * FusedLocationProviderClient (same flow EditAddressViewModel uses) and
- * persists it to the backend through [LocationRepository.create] so the
- * customer's location is actually saved during onboarding.
+ * Backs the shared signup [LocationScreen] used by BOTH customer and provider.
  *
- * Kept deliberately thin: all network/Geocoder work lives here, none in the
- * composable — matching the established MVVM + Clean Architecture split.
+ * Responsibilities:
+ *  1. Resolve a device fix quickly (via [LocationFix], which is fast-first and
+ *     timeout-bounded so the screen never hangs ~a minute).
+ *  2. Write the fix into the shared [SignupDraftViewModel] draft so the PROVIDER
+ *     branch (ServiceAreaScreen / register) carries real coordinates forward.
+ *     This is the fix for "provider location never recorded": previously the
+ *     permission step saved a customer row but fed nothing to the provider draft.
+ *  3. For CUSTOMERS only, also persist a default SavedLocation to the backend.
+ *
+ * The draft is passed in per-call (it is owned by the signup nav graph, not by
+ * this ViewModel) so we don't duplicate or fight its lifecycle.
  */
 @HiltViewModel
 class LocationViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val locationRepo: LocationRepository,
+    private val locationFix: LocationFix,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SignupLocationState())
@@ -62,34 +65,28 @@ class LocationViewModel @Inject constructor(
 
     fun dismissError() { _state.value = _state.value.copy(error = null) }
 
-    /** Manual pin selection (if the screen ever exposes the map picker). */
-    fun onPick(latitude: Double, longitude: Double) {
-        _state.value = _state.value.copy(
-            latitude = latitude,
-            longitude = longitude,
-            address = "%.5f, %.5f".format(latitude, longitude),
-        )
-        viewModelScope.launch {
-            reverseGeocode(latitude, longitude)?.let { resolved ->
-                _state.value = _state.value.copy(address = resolved)
-            }
-        }
-    }
-
     /**
-     * Called after the OS permission dialog returns "granted". Resolves the
-     * current location, saves it as the customer's default location, then
-     * emits [SignupLocationEffect.Done]. On any failure we surface an error but
-     * still allow the user to proceed (signup must never hard-block here).
+     * Called after the OS permission dialog returns "granted".
+     *
+     * @param role  current signup role (decides whether we also POST a
+     *              customer SavedLocation).
+     * @param onResolved called with (lat,lng,address) the moment we have a fix,
+     *              BEFORE any network save, so the caller can write it into the
+     *              shared draft synchronously. Always invoked on a fix; not
+     *              invoked when no fix could be obtained.
      */
-    @SuppressLint("MissingPermission")
-    fun resolveAndSave() {
+    fun resolveAndSave(
+        role: UserRole,
+        onResolved: (Double, Double, String?) -> Unit,
+    ) {
         if (_state.value.locating || _state.value.saving) return
         _state.value = _state.value.copy(locating = true, error = null)
         viewModelScope.launch {
-            val fix = runCatching { fetchCurrentLocation() }.getOrNull()
+            val fix = locationFix.current(context)
             if (fix == null) {
-                // No fix (denied/unavailable). Don't block onboarding.
+                // No fix within the timeout. Don't block onboarding; the
+                // provider can still set the pin on ServiceAreaScreen, and the
+                // customer can add an address later.
                 _state.value = _state.value.copy(locating = false)
                 _effects.emit(SignupLocationEffect.Done)
                 return@launch
@@ -97,14 +94,28 @@ class LocationViewModel @Inject constructor(
 
             val (lat, lng) = fix
             val address = reverseGeocode(lat, lng) ?: "%.5f, %.5f".format(lat, lng)
+
+            // Feed the draft immediately so BOTH branches have coordinates even
+            // if the customer save below fails or is skipped.
+            onResolved(lat, lng, address)
+
             _state.value = _state.value.copy(
                 locating = false,
-                saving = true,
                 latitude = lat,
                 longitude = lng,
                 address = address,
             )
 
+            if (role != UserRole.CUSTOMER) {
+                // Provider: coordinates now live in the draft; the dedicated
+                // ServiceAreaScreen owns the final service-area persistence at
+                // register time. Nothing to POST here.
+                _effects.emit(SignupLocationEffect.Done)
+                return@launch
+            }
+
+            // Customer: persist a default saved location.
+            _state.value = _state.value.copy(saving = true)
             runCatching {
                 locationRepo.create(
                     label = "Home",
@@ -117,8 +128,6 @@ class LocationViewModel @Inject constructor(
                 _state.value = _state.value.copy(saving = false)
                 _effects.emit(SignupLocationEffect.Done)
             }.onFailure { e ->
-                // Surface the error but still advance — the customer can add an
-                // address later from Saved Addresses; we don't trap them here.
                 _state.value = _state.value.copy(
                     saving = false,
                     error = e.message ?: "Couldn't save your location",
@@ -132,21 +141,6 @@ class LocationViewModel @Inject constructor(
     fun skip() {
         viewModelScope.launch { _effects.emit(SignupLocationEffect.Done) }
     }
-
-    @SuppressLint("MissingPermission")
-    private suspend fun fetchCurrentLocation(): Pair<Double, Double>? =
-        withContext(Dispatchers.IO) {
-            val client = LocationServices.getFusedLocationProviderClient(context)
-            val cts = CancellationTokenSource()
-            suspendCancellableCoroutine { cont ->
-                client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
-                    .addOnSuccessListener { loc ->
-                        cont.resume(loc?.let { it.latitude to it.longitude })
-                    }
-                    .addOnFailureListener { cont.resume(null) }
-                cont.invokeOnCancellation { cts.cancel() }
-            }
-        }
 
     private suspend fun reverseGeocode(lat: Double, lng: Double): String? =
         withContext(Dispatchers.IO) {

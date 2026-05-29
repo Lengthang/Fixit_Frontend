@@ -1,21 +1,15 @@
 package com.fixit.app.ui.signup.provider
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
+import com.fixit.app.data.location.LocationFix
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import javax.inject.Inject
-import kotlin.coroutines.resume
 
 data class ServiceAreaState(
     val latitude: Double? = null,
@@ -23,9 +17,9 @@ data class ServiceAreaState(
     val radiusKm: Int = 15,
     val locating: Boolean = false,
     /**
-     * True once the user has explicitly chosen a point (dragged/tapped the pin)
-     * OR a GPS fix has successfully populated the coordinates. Used to stop a
-     * late/empty resolveLocation() callback from wiping a valid selection.
+     * True once the user has explicitly chosen a point (tapped/dragged the pin)
+     * OR a GPS fix has populated the coordinates. Stops a late/empty
+     * resolveLocation() callback from wiping a valid selection.
      */
     val hasUserSelection: Boolean = false,
 )
@@ -33,16 +27,38 @@ data class ServiceAreaState(
 @HiltViewModel
 class ServiceAreaViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val locationFix: LocationFix,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ServiceAreaState())
     val state = _state.asStateFlow()
 
+    /**
+     * Seed from coordinates already captured on the shared LocationScreen so the
+     * map opens centred on the user instead of the Phnom Penh default. Called
+     * once from the screen with the draft's lat/lng. Treated as a real selection
+     * so the Confirm button is immediately enabled and register() has data even
+     * if the provider never touches the map.
+     */
+    fun seed(latitude: Double?, longitude: Double?, radiusKm: Int) {
+        if (_state.value.hasUserSelection) return
+        if (latitude != null && longitude != null) {
+            _state.value = _state.value.copy(
+                latitude = latitude,
+                longitude = longitude,
+                radiusKm = radiusKm,
+                hasUserSelection = true,
+            )
+        } else {
+            _state.value = _state.value.copy(radiusKm = radiusKm)
+        }
+    }
+
     fun onRadiusChange(km: Int) {
         _state.value = _state.value.copy(radiusKm = km.coerceIn(1, 50))
     }
 
-    /** User dropped / dragged the pin or tapped the map. This is authoritative. */
+    /** User tapped/dragged the pin. Authoritative. */
     fun onPick(latitude: Double, longitude: Double) {
         _state.value = _state.value.copy(
             latitude = latitude,
@@ -52,67 +68,24 @@ class ServiceAreaViewModel @Inject constructor(
     }
 
     /**
-     * Tries to fill in lat/lng from the device's last known location.
-     * Permission was requested on the previous (LocationScreen) step; if the
-     * user declined, we keep lat/lng null and the screen Continue button
-     * stays disabled.
-     *
-     * Important: a resolved fix is ONLY applied when it is non-null AND the user
-     * has not already chosen a point. This prevents a slow or failed GPS
-     * callback from overwriting (and nulling out) a pin the provider already
-     * dragged into place — the bug that was silently discarding the chosen
-     * service-area coordinates before they could be saved.
+     * Fills lat/lng from the device location using the shared fast resolver.
+     * Only applied when a non-null fix arrives AND the user hasn't already
+     * picked, so a slow/empty callback can never null out a chosen point.
      */
-    @SuppressLint("MissingPermission")
     fun resolveLocation() {
         if (_state.value.locating) return
-        // Don't re-resolve over an explicit user selection.
         if (_state.value.hasUserSelection) return
 
         _state.value = _state.value.copy(locating = true)
         viewModelScope.launch {
-            val client = LocationServices.getFusedLocationProviderClient(context)
-
-            // 1) Try cached last-known fix first (fast, no battery cost).
-            val cached = suspendCancellableCoroutine<android.location.Location?> { cont ->
-                client.lastLocation
-                    .addOnSuccessListener {
-                        Log.d("ServiceArea", "lastLocation returned: $it")
-                        cont.resume(it)
-                    }
-                    .addOnFailureListener {
-                        Log.w("ServiceArea", "lastLocation failed", it)
-                        cont.resume(null)
-                    }
-            }
-
-            val resolved = cached ?: run {
-                // 2) No cached fix — actively request one. This takes a few seconds.
-                Log.d("ServiceArea", "Requesting fresh location…")
-                suspendCancellableCoroutine<android.location.Location?> { cont ->
-                    val cts = CancellationTokenSource()
-                    client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
-                        .addOnSuccessListener {
-                            Log.d("ServiceArea", "getCurrentLocation returned: $it")
-                            cont.resume(it)
-                        }
-                        .addOnFailureListener {
-                            Log.w("ServiceArea", "getCurrentLocation failed", it)
-                            cont.resume(null)
-                        }
-                    cont.invokeOnCancellation { cts.cancel() }
-                }
-            }
-
-            // Guard: if the user dragged the pin while we were resolving, OR the
-            // fix came back null, leave the existing selection untouched.
+            val fix = locationFix.current(context)
             val current = _state.value
-            if (current.hasUserSelection || resolved == null) {
+            if (current.hasUserSelection || fix == null) {
                 _state.value = current.copy(locating = false)
             } else {
                 _state.value = current.copy(
-                    latitude = resolved.latitude,
-                    longitude = resolved.longitude,
+                    latitude = fix.first,
+                    longitude = fix.second,
                     locating = false,
                     hasUserSelection = true,
                 )

@@ -41,6 +41,7 @@ import com.fixit.app.ui.theme.C
 fun LocationScreen(
     onBack: () -> Unit,
     onContinue: () -> Unit,
+    draftVm: SignupDraftViewModel,
     step: Int = 5,
     total: Int = 11,
     vm: LocationViewModel = hiltViewModel(),
@@ -48,7 +49,7 @@ fun LocationScreen(
     val state by vm.state.collectAsState()
     val snackbar = remember { SnackbarHostState() }
 
-    // Advance only once the ViewModel has finished its save attempt (or skip).
+    // Advance only once the ViewModel has finished resolving/saving (or skip).
     LaunchedEffect(Unit) {
         vm.effects.collect { effect ->
             when (effect) { is SignupLocationEffect.Done -> onContinue() }
@@ -58,13 +59,24 @@ fun LocationScreen(
         state.error?.let { snackbar.showSnackbar(it); vm.dismissError() }
     }
 
-    // Request the OS permission. On grant we resolve + persist the location;
-    // on denial we still advance (skip) so the user is never trapped — they can
-    // add an address later from Saved Addresses.
+    // Request the OS permission. On grant we resolve the fix, write it into the
+    // shared draft (so the provider branch carries real coordinates into
+    // ServiceAreaScreen / register), and for customers also persist it. On
+    // denial we still advance so the user is never trapped.
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { granted ->
-            if (granted) vm.resolveAndSave() else vm.skip()
+            if (granted) {
+                val role = draftVm.state.value.role
+                vm.resolveAndSave(role) { lat, lng, _ ->
+                    // Seed the draft so ServiceAreaScreen opens centred on the
+                    // user and register() has coordinates even if the provider
+                    // never touches the map.
+                    draftVm.update { it.copy(latitude = lat, longitude = lng) }
+                }
+            } else {
+                vm.skip()
+            }
         },
     )
 
@@ -118,7 +130,7 @@ fun LocationScreen(
             },
             enabled = !busy,
         ) {
-            launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+            launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
         OutlineButton("Not now") {
             if (!busy) vm.skip()

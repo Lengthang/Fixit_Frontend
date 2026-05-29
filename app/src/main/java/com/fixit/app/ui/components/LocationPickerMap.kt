@@ -1,5 +1,7 @@
 package com.fixit.app.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -12,6 +14,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fixit.app.ui.theme.C
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.Circle
@@ -28,34 +32,30 @@ import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+
 /**
  * Shared Google-Maps location picker. Single source of truth for every screen
  * that needs the user to visually choose a point (provider service area,
  * provider edit-profile, customer saved addresses).
  *
- * Behaviour:
- *  - Renders a Google Map clipped to the same 16dp rounded card the old fake
- *    [com.fixit.app.ui.signup.provider.MapBackground] used, so the layout of
- *    callers is unchanged.
- *  - A draggable orange pin marks the selection. Dragging the pin OR tapping
- *    anywhere on the map updates [selected] via [onPick].
- *  - When [radiusKm] is non-null a translucent blue circle (Blue @ 12% with a
- *    2dp Blue stroke) is drawn around the pin — the service-area visual that
- *    ServiceArea / EditProfile previously faked with a static circle.
- *  - A "locate me" FAB (bottom-right) calls [onRecenterRequest]; the caller
- *    runs the existing FusedLocationProviderClient flow and feeds the fix back
- *    in through [selected]. The button shows a spinner while [locating].
+ * Design (fixes the "tap not stored / wrong location" bug):
+ *  - [selected] is the ONE source of truth. The marker and camera follow it.
+ *  - User gestures report UP, never via a feedback loop:
+ *      • tapping the map  -> onMapClick -> onPick(latLng)
+ *      • dragging the pin -> onMarkerDragEnd via markerState position read
+ *    Both call [onPick]; the parent updates [selected]; the marker re-renders
+ *    from [selected]. There is no second effect pushing the marker position
+ *    back into onPick, so a picked value can no longer be clobbered.
+ *  - The camera animates to [selected] only when [selected] actually changes,
+ *    so it never fights the user mid-gesture.
  *
  * The composable holds NO business logic and NO network/Geocoder calls — those
  * stay in the ViewModels, exactly as the existing code organises them.
  *
  * @param selected   current pin position, or null if nothing chosen yet.
- * @param onPick     called with the new LatLng whenever the user moves the pin.
+ * @param onPick     called with the new LatLng whenever the user picks a point.
  * @param radiusKm   optional service-area radius to draw; null hides the circle.
  * @param locating   true while the caller is resolving a GPS fix (spins the FAB).
  * @param onRecenterRequest tapped "locate me"; caller resolves + feeds back via [selected].
@@ -72,27 +72,25 @@ fun LocationPickerMap(
     defaultCenter: LatLng = PHNOM_PENH,
 ) {
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(selected ?: defaultCenter, 14f)
+        position = CameraPosition.fromLatLngZoom(selected ?: defaultCenter, 15f)
     }
 
-    // Keep a marker state in sync with the externally-controlled selection so
-    // a "locate me" result (which arrives via [selected]) jumps the pin too.
-    val markerState: MarkerState = rememberMarkerState(position = selected ?: defaultCenter)
+    // Marker is a pure mirror of [selected]; we read its position only on
+    // drag-end to report a pick. We never write the marker back into onPick
+    // from an effect, which is what previously created the clobbering loop.
+    val markerState = rememberMarkerState(position = selected ?: defaultCenter)
 
+    // Whenever the parent's selection changes (tap, drag, or a resolved GPS
+    // fix arriving as [selected]), move the pin AND animate the camera there.
     LaunchedEffect(selected) {
-        if (selected != null) {
-            markerState.position = selected
-            cameraPositionState.position =
-                CameraPosition.fromLatLngZoom(selected, cameraPositionState.position.zoom)
-        }
-    }
-
-    // Dragging the pin commits on each move.
-    LaunchedEffect(markerState.position) {
-        val p = markerState.position
-        if (selected == null || p.latitude != selected.latitude || p.longitude != selected.longitude) {
-            onPick(p)
-        }
+        val target = selected ?: return@LaunchedEffect
+        markerState.position = target
+        cameraPositionState.animate(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.fromLatLngZoom(target, 15f)
+            ),
+            durationMs = 500,
+        )
     }
 
     Box(modifier.clip(RoundedCornerShape(16.dp))) {
@@ -105,6 +103,7 @@ fun LocationPickerMap(
                 myLocationButtonEnabled = false,   // we draw our own themed FAB
                 mapToolbarEnabled = false,
             ),
+            // Tapping anywhere commits that point straight to the parent.
             onMapClick = { latLng -> onPick(latLng) },
         ) {
             if (selected != null && radiusKm != null) {
@@ -120,8 +119,15 @@ fun LocationPickerMap(
                 state = markerState,
                 draggable = true,
                 title = "Selected location",
+                // When the drag finishes, read the final marker position once
+                // and report it up. (onMarkerDragEnd-style: a single commit.)
+                onInfoWindowClick = { },
             )
         }
+
+        // Drag-end commit: observe the marker only while it is actively being
+        // dragged, then push the final position up exactly once.
+        DragEndReporter(markerStatePosition = markerState.position, isDragging = markerState.isDragging, onPick = onPick, selected = selected)
 
         if (radiusKm != null) {
             // Top-left radius badge — same chrome ServiceAreaScreen used.
@@ -165,6 +171,36 @@ fun LocationPickerMap(
                 }
             }
         }
+    }
+}
+
+/**
+ * Reports a marker drag exactly once, when dragging transitions from active to
+ * idle. Reading [com.google.maps.android.compose.MarkerState.isDragging] lets
+ * us avoid committing on every intermediate frame (which is what caused the
+ * old feedback loop). When the user lets go and the new position differs from
+ * the current [selected], we report it up.
+ */
+@Composable
+private fun DragEndReporter(
+    markerStatePosition: LatLng,
+    isDragging: Boolean,
+    selected: LatLng?,
+    onPick: (LatLng) -> Unit,
+) {
+    // Fire only on the falling edge of isDragging (true -> false).
+    val wasDragging = remember { androidx.compose.runtime.mutableStateOf(false) }
+    LaunchedEffect(isDragging) {
+        if (wasDragging.value && !isDragging) {
+            val p = markerStatePosition
+            if (selected == null ||
+                p.latitude != selected.latitude ||
+                p.longitude != selected.longitude
+            ) {
+                onPick(p)
+            }
+        }
+        wasDragging.value = isDragging
     }
 }
 

@@ -7,9 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,20 +19,20 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.fixit.app.ui.components.FixItScreen
+import com.fixit.app.ui.components.LocationPickerMap
 import com.fixit.app.ui.components.PrimaryButton
 import com.fixit.app.ui.components.Progress
 import com.fixit.app.ui.components.ScreenTitle
 import com.fixit.app.ui.components.TopBar
 import com.fixit.app.ui.signup.SignupDraftViewModel
 import com.fixit.app.ui.theme.C
-import androidx.compose.ui.layout.onGloballyPositioned
-import com.fixit.app.ui.components.LocationPickerMap
 import com.google.android.gms.maps.model.LatLng
 
 @Composable
@@ -46,8 +43,17 @@ fun ServiceAreaScreen(
     vm: ServiceAreaViewModel = hiltViewModel(),
 ) {
     val state by vm.state.collectAsState()
+    val draft by draftVm.state.collectAsState()
 
-    LaunchedEffect(Unit) { vm.resolveLocation() }
+    // Seed from coordinates already captured on the shared LocationScreen so the
+    // map opens centred on the user. Only fall back to an active resolve if the
+    // draft has nothing yet (e.g. permission was denied earlier).
+    LaunchedEffect(Unit) {
+        vm.seed(draft.latitude, draft.longitude, draft.serviceRadiusKm)
+        if (draft.latitude == null || draft.longitude == null) {
+            vm.resolveLocation()
+        }
+    }
 
     FixItScreen {
         TopBar(step = 6, total = 11, onBack = onBack)
@@ -69,32 +75,6 @@ fun ServiceAreaScreen(
                 .fillMaxWidth()
                 .height(320.dp),
         )
-//        Box(
-//            Modifier.padding(horizontal = 24.dp).fillMaxWidth().height(320.dp)
-//                .clip(RoundedCornerShape(16.dp))
-//                .border(1.dp, C.Line, RoundedCornerShape(16.dp)),
-//        ) {
-//            MapBackground()
-//            Box(
-//                Modifier.align(Alignment.Center).size(220.dp).clip(CircleShape)
-//                    .background(C.Blue.copy(alpha = 0.12f))
-//                    .border(2.dp, C.Blue, CircleShape),
-//            )
-//            Icon(
-//                Icons.Filled.LocationOn, null, tint = C.Orange,
-//                modifier = Modifier.align(Alignment.Center).size(48.dp),
-//            )
-//            Box(
-//                Modifier.align(Alignment.TopStart).padding(12.dp)
-//                    .clip(RoundedCornerShape(20.dp)).background(Color.White)
-//                    .padding(horizontal = 12.dp, vertical = 8.dp),
-//            ) {
-//                Text(
-//                    "Radius · ${state.radiusKm} km",
-//                    fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.Ink,
-//                )
-//            }
-//        }
 
         // Functional radius slider
         Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 18.dp)) {
@@ -108,7 +88,7 @@ fun ServiceAreaScreen(
             if (state.latitude == null && !state.locating) {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Couldn't read your location. Tap to retry.",
+                    "Couldn't read your location. Tap to retry, or tap the map to set it manually.",
                     fontSize = 12.sp,
                     color = C.Orange,
                     modifier = Modifier.clickable { vm.resolveLocation() },

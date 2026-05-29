@@ -205,6 +205,7 @@ fun FixItNavGraph(startDestination: String) {
                             nav.navigate(Routes.PROMO)
                         }
                     },
+                    draftVm = draftVm,
                 )
             }
 
