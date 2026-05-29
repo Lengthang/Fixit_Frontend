@@ -57,7 +57,6 @@ fun CustomerProfileScreen(
     onPersonalInfo: () -> Unit,
     onSavedAddresses: () -> Unit,
     onPaymentMethods: () -> Unit,
-    onPromos: () -> Unit,
     onTopUp: () -> Unit,
     onHelp: () -> Unit,
     viewModel: CustomerProfileViewModel = hiltViewModel(),
@@ -139,13 +138,6 @@ fun CustomerProfileScreen(
                         icon = Icons.Filled.CreditCard,
                         label = "Payment methods",
                         onClick = onPaymentMethods,
-                    )
-                    SettingRow(
-                        icon = Icons.Filled.LocalOffer,
-                        label = "Promos & rewards",
-                        badge = state.activePromosCount.takeIf { it > 0 }?.toString(),
-                        badgeAccent = true,
-                        onClick = onPromos,
                     )
                     SettingRow(
                         icon = Icons.Filled.HelpOutline,

@@ -67,6 +67,10 @@ object Routes {
     const val CUSTOMER_PROVIDERS   = "customer/providers"
     const val CUSTOMER_PROVIDERS_BY_CATEGORY = "customer/providers?categoryId={categoryId}&categoryName={categoryName}"
 
+    const val CUSTOMER_PERSONAL_INFO   = "customer/personal_info"
+    const val CUSTOMER_PAYMENT_METHODS = "customer/payment_methods"
+    const val CUSTOMER_WALLET_TOPUP    = "customer/wallet/topup"
+    const val CUSTOMER_HELP            = "customer/help"
     // ── Customer saved addresses ──
     const val CUSTOMER_SAVED_ADDRESSES = "customer/addresses"
     const val CUSTOMER_ADDRESS_NEW     = "customer/addresses/new"

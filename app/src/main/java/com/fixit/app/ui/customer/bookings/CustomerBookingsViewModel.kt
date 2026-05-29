@@ -31,14 +31,15 @@ data class CustomerBookingsState(
                 .filter {
                     it.status == BookingStatus.PENDING ||
                             it.status == BookingStatus.IN_PROGRESS ||
-                            it.status == BookingStatus.AWAITING_CONFIRMATION ||
-                            it.status == BookingStatus.DISPUTED
+                            it.status == BookingStatus.AWAITING_CONFIRMATION
                 }
                 // Soonest first — matches the screenshot where "Today" rows
                 // appear above a future date.
                 .sortedBy { it.scheduledAt }
             BookingsTab.HISTORY -> bookings
-                .filter { it.status == BookingStatus.COMPLETED }
+                .filter { it.status == BookingStatus.COMPLETED ||
+                        it.status == BookingStatus.DISPUTED
+                }
                 .sortedByDescending { it.scheduledAt }
         }
 }

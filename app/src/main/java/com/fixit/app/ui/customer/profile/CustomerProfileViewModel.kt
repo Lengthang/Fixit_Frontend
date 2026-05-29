@@ -28,7 +28,6 @@ data class CustomerProfileState(
     val walletBalance: BigDecimal = BigDecimal.ZERO,
     // counts driving the row subtitles/badges
     val savedAddressesCount: Int = 0,
-    val activePromosCount: Int = 0,
 )
 
 @HiltViewModel
@@ -36,7 +35,6 @@ class CustomerProfileViewModel @Inject constructor(
     private val customerRepo: CustomerRepository,
     private val walletRepo: WalletRepository,
     private val locationRepo: LocationRepository,
-    private val promoRepo: PromoRepository,
     private val authRepo: AuthRepository,
 ) : ViewModel() {
 
@@ -83,12 +81,10 @@ class CustomerProfileViewModel @Inject constructor(
         val meDeferred        = async { runCatching { customerRepo.me() } }
         val walletDeferred    = async { runCatching { walletRepo.me() } }
         val addressesDeferred = async { runCatching { locationRepo.list() } }
-        val promosDeferred    = async { runCatching { promoRepo.active() } }
 
         val me        = meDeferred.await().getOrNull()
         val wallet    = walletDeferred.await().getOrNull()
         val addresses = addressesDeferred.await().getOrNull().orEmpty()
-        val promos    = promosDeferred.await().getOrNull().orEmpty()
 
         _state.value = _state.value.copy(
             name                = me?.name,
@@ -97,7 +93,6 @@ class CustomerProfileViewModel @Inject constructor(
             profilePhotoUrl     = me?.profilePhotoUrl,
             walletBalance       = wallet?.balance?.let { BigDecimal.valueOf(it) } ?: BigDecimal.ZERO,
             savedAddressesCount = addresses.size,
-            activePromosCount   = promos.size,
         )
     }
 }

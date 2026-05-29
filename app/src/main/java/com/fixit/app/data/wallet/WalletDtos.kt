@@ -18,3 +18,9 @@ data class WalletTransactionResponse(
     val description: String? = null,
     @Json(name = "created_at") val createdAt: String,
 )
+/** POST /payments/wallet/top-up body. Mirrors backend WalletTopUpRequest. */
+@JsonClass(generateAdapter = true)
+data class WalletTopUpRequest(
+    val amount: Double,
+    @Json(name = "payment_method_id") val paymentMethodId: String,
+)

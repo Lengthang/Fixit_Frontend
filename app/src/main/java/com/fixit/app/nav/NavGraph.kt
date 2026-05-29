@@ -66,6 +66,10 @@ import com.fixit.app.ui.customer.addresses.SavedAddressesScreen
 import com.fixit.app.ui.customer.addresses.SavedAddressesViewModel
 import com.fixit.app.ui.customer.addresses.EditAddressScreen
 import com.fixit.app.ui.customer.addresses.EditAddressViewModel
+import com.fixit.app.ui.customer.profile.CustomerEditProfileScreen
+import com.fixit.app.ui.customer.profile.CustomerPaymentMethodsScreen
+import com.fixit.app.ui.customer.profile.WalletTopUpScreen
+import com.fixit.app.ui.customer.profile.CustomerHelpScreen
 
 private const val DEV_TAG = "DevAuth"
 private const val PROFILE_REFRESH_KEY = "profile_refresh"
@@ -530,13 +534,39 @@ fun FixItNavGraph(startDestination: String) {
             }
             CustomerProfileScreen(
                 onTabClick       = { nav.switchCustomerTab(it) },
-                onPersonalInfo   = { /* TODO: customer edit-profile screen */ },
+                onPersonalInfo   = { nav.navigate(Routes.CUSTOMER_PERSONAL_INFO) },
                 onSavedAddresses = { nav.navigate(Routes.CUSTOMER_SAVED_ADDRESSES) },
-                onPaymentMethods = { /* TODO: payment methods screen */ },
-                onPromos         = { /* TODO: promos & rewards screen */ },
-                onTopUp          = { /* TODO: wallet top-up flow */ },
-                onHelp           = { /* TODO: help & support */ },
+                onPaymentMethods = { nav.navigate(Routes.CUSTOMER_PAYMENT_METHODS) },
+                onTopUp          = { nav.navigate(Routes.CUSTOMER_WALLET_TOPUP) },
+                onHelp           = { nav.navigate(Routes.CUSTOMER_HELP) },
                 viewModel        = vm,
+            )
+        }
+
+        composable(Routes.CUSTOMER_PERSONAL_INFO) {
+            CustomerEditProfileScreen(
+                onBack  = { nav.popBackStack() },
+                onSaved = { nav.popBackStack() },
+            )
+        }
+
+        composable(Routes.CUSTOMER_PAYMENT_METHODS) {
+            CustomerPaymentMethodsScreen(
+                onBack = { nav.popBackStack() },
+            )
+        }
+
+        composable(Routes.CUSTOMER_WALLET_TOPUP) {
+            WalletTopUpScreen(
+                onBack             = { nav.popBackStack() },
+                onAddPaymentMethod = { nav.navigate(Routes.CUSTOMER_PAYMENT_METHODS) },
+                onTopUpComplete    = { nav.popBackStack() },
+            )
+        }
+
+        composable(Routes.CUSTOMER_HELP) {
+            CustomerHelpScreen(
+                onBack = { nav.popBackStack() },
             )
         }
 

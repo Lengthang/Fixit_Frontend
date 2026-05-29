@@ -26,6 +26,15 @@ class WalletRepository @Inject constructor(private val api: WalletApi) {
             description = description,
             createdAt   = parseInstantSafe(createdAt),
         )
+    suspend fun topUp(amount: BigDecimal, methodId: String): BigDecimal =
+        BigDecimal.valueOf(
+            api.topUp(
+                WalletTopUpRequest(
+                    amount = amount.toDouble(),
+                    paymentMethodId = methodId,
+                )
+            ).balance
+        )
 
     private fun parseInstantSafe(iso: String?): Instant =
         iso?.takeIf { it.isNotBlank() }
