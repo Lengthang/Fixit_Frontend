@@ -282,7 +282,44 @@ class CustomerBookingViewModel @Inject constructor(
             TimeSlot(time = t, enabled = enabled)
         }
     }
+    // ── Quantity ──────────────────────────────────────────────────────────
 
+    /**
+     * Bump a service's quantity by one. Used by the editable service-list
+     * column on the booking screen. Re-fires the server price-preview so the
+     * subtotal label stays server-authoritative as the cart changes.
+     */
+    fun increment(serviceId: String) {
+        val current = _state.value.quantities[serviceId] ?: 0
+        val next = current + 1
+        _state.value = _state.value.copy(
+            quantities = _state.value.quantities + (serviceId to next),
+        )
+        refreshServerSubtotal()
+    }
+
+    /**
+     * Drop a service's quantity by one, floored at its [Service.minQuantity]
+     * (matching the provider-detail stepper). Going below the floor removes the
+     * service from the cart entirely. Re-fires the server price-preview.
+     */
+    fun decrement(serviceId: String) {
+        val current = _state.value.quantities[serviceId] ?: 0
+        if (current <= 0) return
+
+        val minQty = _state.value.detail?.services
+            ?.firstOrNull { it.id == serviceId }?.minQuantity ?: 1
+        val next = current - 1
+
+        val newQuantities = if (next < minQty) {
+            // Below the service's minimum → remove it from the cart.
+            _state.value.quantities - serviceId
+        } else {
+            _state.value.quantities + (serviceId to next)
+        }
+        _state.value = _state.value.copy(quantities = newQuantities)
+        refreshServerSubtotal()
+    }
     fun selectDate(date: LocalDate) {
         val detail = _state.value.detail ?: return
         val option = _state.value.dates.firstOrNull { it.date == date } ?: return

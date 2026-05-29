@@ -52,6 +52,7 @@ fun ProviderProfileScreen(
     onPaymentAndPayouts: () -> Unit,
     onReviews: () -> Unit,
     onDisputeHistory: () -> Unit,
+    onVerification: () -> Unit,
     onHelp: () -> Unit,
     viewModel: ProviderProfileViewModel = hiltViewModel()
 ) {
@@ -146,7 +147,12 @@ fun ProviderProfileScreen(
                         ProviderStatus.REJECTED -> "Rejected"
                         null -> null
                     }
-                    SettingRow(Icons.Filled.Security,    "Verification", badge = statusBadge)
+                    SettingRow(
+                        Icons.Filled.Security,
+                        "Verification",
+                        badge   = statusBadge,
+                        onClick = onVerification,
+                    )
                     SettingRow(Icons.Filled.HelpOutline, "Help & support",      onClick = onHelp)
                     SettingRow(
                         Icons.AutoMirrored.Filled.Logout,

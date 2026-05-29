@@ -30,6 +30,7 @@ object Routes {
 
     // ── Provider sub-screens (off-tab) ──
     const val PROVIDER_EDIT_PROFILE    = "provider/edit_profile"
+    const val PROVIDER_VERIFICATION    = "provider/verification"
     const val PROVIDER_EARNINGS        = "provider/earnings"
     const val PROVIDER_REVIEWS         = "provider/reviews"
     // ── Provider disputes ──
@@ -47,6 +48,7 @@ object Routes {
     const val PROVIDER_SERVICE_NEW     = "provider/service_new"
     const val PROVIDER_SERVICE_DETAIL  = "provider/service/{serviceId}"
     const val PROVIDER_SERVICE_EDIT    = "provider/service/{serviceId}/edit"
+    const val PROVIDER_HELP            = "provider/help"
 
     fun providerServiceDetail(id: String) = "provider/service/$id"
     fun providerServiceEdit(id: String)   = "provider/service/$id/edit"

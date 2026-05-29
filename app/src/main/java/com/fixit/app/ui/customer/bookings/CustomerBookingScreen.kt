@@ -1,6 +1,8 @@
 package com.fixit.app.ui.customer.booking
 
 import android.app.DatePickerDialog
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -34,15 +37,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import com.fixit.app.domain.model.Service
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.TopBar
 import com.fixit.app.ui.theme.C
@@ -102,8 +110,24 @@ fun CustomerBookingScreen(
                         modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
                     )
 
-                    // ── Provider + cart summary card ─────────────────────
+                    // ── Provider header card (itemized list now lives in the
+                    //    editable service-list column below) ───────────────
                     BookingProviderCard(state)
+
+                    Spacer(Modifier.height(20.dp))
+
+                    // ── Editable service list (Task 1) ───────────────────
+                    SectionLabel("Services")
+                    Spacer(Modifier.height(10.dp))
+                    if (state.selectedServices.isEmpty()) {
+                        HelperText("No services selected.")
+                    } else {
+                        ServiceListColumn(
+                            services = state.selectedServices,
+                            onIncrement = viewModel::increment,
+                            onDecrement = viewModel::decrement,
+                        )
+                    }
 
                     Spacer(Modifier.height(20.dp))
 
@@ -165,7 +189,7 @@ fun CustomerBookingScreen(
 
                     Spacer(Modifier.height(20.dp))
 
-                    // ── Promo code ───────────────────────────────────────
+                    // ── Promo code (Task 4: Apply/Remove toggle) ─────────
                     SectionLabel("Promo code")
                     Spacer(Modifier.height(10.dp))
                     PromoRow(
@@ -225,6 +249,11 @@ fun CustomerBookingScreen(
                         }
                     }
 
+                    Spacer(Modifier.height(20.dp))
+
+                    // ── Subtotal summary (Task 2: moved to bottom) ───────
+                    SummarySection(state)
+
                     Spacer(Modifier.height(24.dp))
                 }
 
@@ -241,7 +270,9 @@ fun CustomerBookingScreen(
     }
 }
 
-// ── Provider + cart summary ───────────────────────────────────────────────────
+// ── Provider header ───────────────────────────────────────────────────────────
+// Trimmed to provider identity only — the per-service breakdown moved to the
+// editable ServiceListColumn so quantities can be changed inline.
 
 @Composable
 private fun BookingProviderCard(state: CustomerBookingState) {
@@ -285,26 +316,220 @@ private fun BookingProviderCard(state: CustomerBookingState) {
                 Text(summary, fontSize = 12.sp, color = C.Slate, modifier = Modifier.padding(top = 2.dp))
             }
         }
+    }
+}
 
-        if (state.selectedServices.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            HorizontalDivider(color = C.Line)
-            Spacer(Modifier.height(10.dp))
-            state.selectedServices.forEach { (svc, qty) ->
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text("${svc.title} × $qty", fontSize = 12.5.sp, color = C.Slate)
-                    Text(
-                        formatPrice(svc.price.multiply(BigDecimal(qty))),
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = C.Ink,
-                    )
+// ── Editable service list column (Task 1) ─────────────────────────────────────
+// One row per selected service, stacked vertically. Each row: image, name,
+// price, and a +/− quantity stepper. Reuses the visual language of the
+// provider-detail stepper so the affordance stays consistent across screens.
+
+@Composable
+private fun ServiceListColumn(
+    services: List<Pair<Service, Int>>,
+    onIncrement: (String) -> Unit,
+    onDecrement: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        services.forEach { (svc, qty) ->
+            ServiceListRow(
+                service = svc,
+                quantity = qty,
+                onIncrement = { onIncrement(svc.id) },
+                onDecrement = { onDecrement(svc.id) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ServiceListRow(
+    service: Service,
+    quantity: Int,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+            .background(Color.White)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // ── Thumbnail (image_url) ────────────────────────────
+        // Tinted placeholder with a diagonal-stripe motif when the service
+        // has no photo, matching the provider-detail card behavior.
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(C.Green.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val img = service.imageUrl
+            if (!img.isNullOrBlank()) {
+                AsyncImage(
+                    model = img,
+                    contentDescription = service.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val stripe = 8.dp.toPx()
+                    var x = -size.height
+                    while (x < size.width) {
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.25f),
+                            start = Offset(x, size.height),
+                            end = Offset(x + size.height, 0f),
+                            strokeWidth = stripe / 2f,
+                        )
+                        x += stripe * 1.6f
+                    }
                 }
             }
         }
+
+        // ── Name + per-unit price ────────────────────────────
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                service.title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = C.Ink,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                formatPrice(service.price),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = C.Orange,
+                letterSpacing = (-0.3).sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            // Line total when more than one unit, so the row reads clearly.
+            if (quantity > 1) {
+                Text(
+                    "${formatPrice(service.price.multiply(BigDecimal(quantity)))} total",
+                    fontSize = 11.sp,
+                    color = C.Slate,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+
+        // ── Quantity stepper ─────────────────────────────────
+        QtyStepper(
+            quantity = quantity,
+            onIncrement = onIncrement,
+            onDecrement = onDecrement,
+        )
+    }
+}
+
+@Composable
+private fun QtyStepper(
+    quantity: Int,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.5.dp, C.Blue, RoundedCornerShape(14.dp))
+            .animateContentSize(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .clickable { onDecrement() }
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        ) {
+            Text("−", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.Blue)
+        }
+        Text(
+            quantity.toString(),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = C.Ink,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(min = 20.dp),
+        )
+        Box(
+            modifier = Modifier
+                .clickable { onIncrement() }
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        ) {
+            Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.Blue)
+        }
+    }
+}
+
+// ── Subtotal summary (Task 2 + Task 3) ────────────────────────────────────────
+// Lives at the bottom of the scroll area, above the sticky Confirm bar. All
+// figures (subtotal, discount, total) are derived in the ViewModel and update
+// live as quantities change or a promo is applied/removed.
+
+@Composable
+private fun SummarySection(state: CustomerBookingState) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White)
+            .border(1.dp, C.Line, RoundedCornerShape(14.dp))
+            .padding(16.dp),
+    ) {
+        SummaryRow(label = "Subtotal", value = formatPrice(state.subtotal))
+
+        state.appliedPromo?.let { promo ->
+            Spacer(Modifier.height(10.dp))
+            SummaryRow(
+                label = "Promo (${promo.code})",
+                value = "−${formatPrice(state.discount)}",
+                valueColor = C.Green,
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(color = C.Line)
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Total", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = C.Ink)
+            Text(
+                formatPrice(state.total),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = C.Ink,
+                letterSpacing = (-0.3).sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SummaryRow(
+    label: String,
+    value: String,
+    valueColor: Color = C.Ink,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, fontSize = 13.sp, color = C.Slate)
+        Text(value, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = valueColor)
     }
 }
 

@@ -232,36 +232,6 @@ fun EditProfileScreen(
                         }
                     }
 
-                    // ── CERTIFICATES & NATIONAL ID ───────────────────────
-                    EpSection(
-                        title = "Certificates & ID",
-                        hint  = "Verified pros book 3× more",
-                    ) {
-                        // Cert name input (the human-readable label; the
-                        // file URL is uploaded separately just below).
-                        EpInput(
-                            label         = "Certification name",
-                            value         = state.certificationName,
-                            onValueChange = viewModel::onCertNameChange,
-                            placeholder   = "e.g. CA Plumbing License C-36",
-                        )
-                        EpFileRow(
-                            title     = "Certificate",
-                            url       = state.certificationUrl,
-                            uploading = state.uploadingCert,
-                            onChoose  = { pickFor(UploadTarget.CERTIFICATE) },
-                            onRemove  = viewModel::removeCertificate,
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        EpFileRow(
-                            title     = "National ID",
-                            url       = state.nationalIdUrl,
-                            uploading = state.uploadingNationalId,
-                            onChoose  = { pickFor(UploadTarget.NATIONAL_ID) },
-                            onRemove  = viewModel::removeNationalId,
-                        )
-                    }
-
                     // ── WORK LOCATION ────────────────────────────────────
                     // Mirrors ServiceAreaScreen's layout exactly:
                     // big map block (320.dp) + RadiusSlider + endpoint
@@ -269,7 +239,6 @@ fun EditProfileScreen(
                     // canvas, visually anchoring the service area to the
                     // selected location (which the VM holds as lat/lng).
                     EpSection(title = "Work location") {
-                        EpSection(title = "Work location") {
                             LocationPickerMap(
                                 selected = state.latitude?.let { lat ->
                                     state.longitude?.let { lng -> LatLng(lat, lng) }
@@ -319,7 +288,7 @@ fun EditProfileScreen(
                                     modifier = Modifier.clickable { viewModel.resolveLocation() },
                                 )
                             }
-                        }
+
                         Spacer(modifier = Modifier.height(18.dp))
                         Row(
                             modifier              = Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -339,28 +308,6 @@ fun EditProfileScreen(
                                 color      = C.Blue,
                             )
                         }
-                        // Imported from ServiceAreaScreen — identical drag
-                        // behaviour, identical visuals.
-//                        RadiusSlider(
-//                            value         = state.serviceRadiusKm,
-//                            onValueChange = viewModel::onRadiusChange,
-//                        )
-//                        Row(
-//                            modifier              = Modifier.fillMaxWidth().padding(top = 4.dp),
-//                            horizontalArrangement = Arrangement.SpaceBetween,
-//                        ) {
-//                            Text("1 km",  fontSize = 11.sp, color = C.Mute)
-//                            Text("50 km", fontSize = 11.sp, color = C.Mute)
-//                        }
-//                        if (state.latitude == null && !state.locating) {
-//                            Spacer(modifier = Modifier.height(12.dp))
-//                            Text(
-//                                "Couldn't read your location. Tap to retry.",
-//                                fontSize = 12.sp,
-//                                color    = C.Orange,
-//                                modifier = Modifier.clickable { viewModel.resolveLocation() },
-//                            )
-//                        }
                     }
 
                     // ── AVAILABILITY ─────────────────────────────────────
@@ -849,302 +796,6 @@ private fun EpAddCategoryChip(onClick: () -> Unit) {
     }
 }
 
-// ── File row (one row per file slot — cert or national ID) ───────────────
-@Composable
-private fun EpFileRow(
-    title    : String,
-    url      : String?,
-    uploading: Boolean,
-    onChoose : () -> Unit,
-    onRemove : () -> Unit,
-) {
-    if (url == null) {
-        // Empty state — tappable upload card.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .border(2.dp, C.Line, RoundedCornerShape(12.dp))
-                .background(C.Subtle)
-                .clickable(enabled = !uploading) { onChoose() }
-                .padding(horizontal = 14.dp, vertical = 16.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            IconBox(bg = C.BlueSoft) {
-                if (uploading) {
-                    CircularProgressIndicator(
-                        color       = C.Blue,
-                        strokeWidth = 2.dp,
-                        modifier    = Modifier.size(18.dp),
-                    )
-                } else {
-                    Canvas(modifier = Modifier.size(18.dp)) {
-                        val s      = this.size.width / 24f
-                        val stroke = Stroke(2.2f * s, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                        val base   = Path().apply {
-                            moveTo(21f * s, 15f * s); lineTo(21f * s, 19f * s)
-                            lineTo(3f * s, 19f * s);  lineTo(3f * s, 15f * s)
-                        }
-                        drawPath(base, C.Blue, style = stroke)
-                        drawLine(C.Blue, Offset(12f * s, 15f * s), Offset(12f * s, 3f * s), 2.2f * s, StrokeCap.Round)
-                        val head = Path().apply {
-                            moveTo(7f * s, 8f * s); lineTo(12f * s, 3f * s); lineTo(17f * s, 8f * s)
-                        }
-                        drawPath(head, C.Blue, style = stroke)
-                    }
-                }
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Upload $title",
-                    fontSize   = 13.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color      = C.Ink,
-                )
-                Text(
-                    "JPG, PNG, GIF or WEBP · Max 10 MB",
-                    fontSize = 11.5.sp,
-                    color    = C.Slate,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(C.Blue)
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
-            ) {
-                Text(
-                    "Choose",
-                    fontSize   = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color      = Color.White,
-                )
-            }
-        }
-    } else {
-        // Filled state — thumbnail + filename + Replace/Remove.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, C.Line, RoundedCornerShape(12.dp))
-                .background(Color.White, RoundedCornerShape(12.dp))
-                .padding(12.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AsyncImage(
-                model              = url,
-                contentDescription = null,
-                modifier           = Modifier
-                    .width(48.dp)
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(C.Subtle),
-            )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        title,
-                        fontSize   = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color      = C.Ink,
-                        modifier   = Modifier.weight(1f, fill = false),
-                    )
-                    Box(
-                        modifier = Modifier.size(14.dp).clip(CircleShape).background(C.Green),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Canvas(modifier = Modifier.size(8.dp)) {
-                            val s    = this.size.width / 24f
-                            val path = Path().apply {
-                                moveTo(5f * s, 12f * s); lineTo(10f * s, 17f * s); lineTo(20f * s, 7f * s)
-                            }
-                            drawPath(
-                                path, Color.White,
-                                style = Stroke(3.5f * s, cap = StrokeCap.Round, join = StrokeJoin.Round),
-                            )
-                        }
-                    }
-                }
-                Text(
-                    fileNameFromUrl(url),
-                    fontSize = 11.5.sp,
-                    color    = C.Slate,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .border(1.5.dp, C.Blue, RoundedCornerShape(16.dp))
-                    .clickable(enabled = !uploading) { onChoose() }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            ) {
-                if (uploading) {
-                    CircularProgressIndicator(
-                        color       = C.Blue,
-                        strokeWidth = 2.dp,
-                        modifier    = Modifier.size(12.dp),
-                    )
-                } else {
-                    Text(
-                        "Replace",
-                        fontSize   = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color      = C.Blue,
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(C.RedSoft)
-                    .clickable(enabled = !uploading) { onRemove() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Canvas(modifier = Modifier.size(14.dp)) {
-                    val s      = this.size.width / 24f
-                    val stroke = Stroke(2.2f * s, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    drawLine(C.Red, Offset(3f * s, 6f * s),  Offset(21f * s, 6f * s), 2.2f * s, StrokeCap.Round)
-                    val body = Path().apply {
-                        moveTo(5f * s, 6f * s);   lineTo(7f * s, 20f * s)
-                        lineTo(17f * s, 20f * s); lineTo(19f * s, 6f * s)
-                    }
-                    drawPath(body, C.Red, style = stroke)
-                    drawLine(C.Red, Offset(10f * s, 11f * s), Offset(10f * s, 17f * s), 2.2f * s, StrokeCap.Round)
-                    drawLine(C.Red, Offset(14f * s, 11f * s), Offset(14f * s, 17f * s), 2.2f * s, StrokeCap.Round)
-                }
-            }
-        }
-    }
-}
-
-// ── Location block — same map/pin/circle/radius-badge as ServiceAreaScreen ─
-//
-// Reuses MapBackground (imported). The circle + Icons.Filled.LocationOn pin
-// (C.Orange, 48dp) and the "Radius · N km" badge are layered on top of the
-// shared canvas exactly like ServiceAreaScreen does it. The only addition
-// is the bottom-left address pill and the top-right "Change" pill, which
-// give the user a way to see and refresh their location without leaving
-// the edit screen.
-//@Composable
-//private fun LocationBlock(
-//    radiusKm     : Int,
-//    locationLabel: String,
-//    locating     : Boolean,
-//    onChange     : () -> Unit,
-//) {
-//    Box(
-//        Modifier
-//            .fillMaxWidth()
-//            .height(320.dp)
-//            .clip(RoundedCornerShape(16.dp))
-//            .border(1.dp, C.Line, RoundedCornerShape(16.dp)),
-//    ) {
-//        // Shared MapBackground from ServiceAreaScreen.kt.
-//        MapBackground()
-//
-//        // Service-area circle — visually anchored to the centre of the map.
-//        Box(
-//            Modifier
-//                .align(Alignment.Center)
-//                .size(220.dp)
-//                .clip(CircleShape)
-//                .background(C.Blue.copy(alpha = 0.12f))
-//                .border(2.dp, C.Blue, CircleShape),
-//        )
-//
-//        // Same icon style ServiceAreaScreen uses — orange location pin.
-//        Icon(
-//            imageVector        = Icons.Filled.LocationOn,
-//            contentDescription = null,
-//            tint               = C.Orange,
-//            modifier           = Modifier.align(Alignment.Center).size(48.dp),
-//        )
-//
-//        // Top-left radius badge (matches ServiceAreaScreen).
-//        Box(
-//            Modifier
-//                .align(Alignment.TopStart)
-//                .padding(12.dp)
-//                .clip(RoundedCornerShape(20.dp))
-//                .background(Color.White)
-//                .padding(horizontal = 12.dp, vertical = 8.dp),
-//        ) {
-//            Text(
-//                "Radius · $radiusKm km",
-//                fontSize   = 12.sp,
-//                fontWeight = FontWeight.SemiBold,
-//                color      = C.Ink,
-//            )
-//        }
-//
-//        // Top-right "Change" pill — kicks off the same resolveLocation()
-//        // flow ServiceAreaScreen uses. Tapping refreshes lat/lng and
-//        // re-geocodes the address. Disabled while a fix is in flight.
-//        Row(
-//            modifier = Modifier
-//                .align(Alignment.TopEnd)
-//                .padding(12.dp)
-//                .clip(RoundedCornerShape(20.dp))
-//                .background(Color.White)
-//                .clickable(enabled = !locating) { onChange() }
-//                .padding(horizontal = 12.dp, vertical = 6.dp),
-//            verticalAlignment     = Alignment.CenterVertically,
-//            horizontalArrangement = Arrangement.spacedBy(6.dp),
-//        ) {
-//            if (locating) {
-//                CircularProgressIndicator(
-//                    color       = C.Blue,
-//                    strokeWidth = 2.dp,
-//                    modifier    = Modifier.size(12.dp),
-//                )
-//            }
-//            Text(
-//                if (locating) "Locating…" else "Change",
-//                fontSize   = 12.sp,
-//                fontWeight = FontWeight.SemiBold,
-//                color      = C.Blue,
-//            )
-//        }
-//
-//        // Bottom-left address pill — reflects locationLabel from state.
-//        // Updates instantly when coords change, then upgrades to the
-//        // geocoded address when reverse-geocoding lands.
-//        Row(
-//            modifier = Modifier
-//                .align(Alignment.BottomStart)
-//                .padding(12.dp)
-//                .clip(RoundedCornerShape(20.dp))
-//                .background(Color.White)
-//                .padding(horizontal = 12.dp, vertical = 6.dp),
-//            verticalAlignment     = Alignment.CenterVertically,
-//            horizontalArrangement = Arrangement.spacedBy(6.dp),
-//        ) {
-//            Icon(
-//                imageVector        = Icons.Filled.LocationOn,
-//                contentDescription = null,
-//                tint               = C.Blue,
-//                modifier           = Modifier.size(12.dp),
-//            )
-//            Text(
-//                locationLabel,
-//                fontSize   = 11.5.sp,
-//                fontWeight = FontWeight.SemiBold,
-//                color      = C.Ink,
-//            )
-//        }
-//    }
-//}
-
 // ── Day pill (Monday-first; controlled by VM toggle) ─────────────────────
 @Composable
 private fun EpDayPill(d: String, active: Boolean, onClick: () -> Unit) {
@@ -1256,9 +907,6 @@ private fun formatTwelveHour(hour24: Int, minute: Int): Pair<String, String> {
     return "%d:%02d".format(h12, minute) to period
 }
 
-/** "https://x.y/media/images/abc123.jpg" → "abc123.jpg". */
-private fun fileNameFromUrl(url: String): String =
-    url.substringAfterLast('/').ifBlank { "uploaded file" }
 
 private fun initialsForLocal(name: String?): String {
     if (name.isNullOrBlank()) return "?"

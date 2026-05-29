@@ -70,7 +70,8 @@ import com.fixit.app.ui.customer.profile.CustomerEditProfileScreen
 import com.fixit.app.ui.customer.profile.CustomerPaymentMethodsScreen
 import com.fixit.app.ui.customer.profile.WalletTopUpScreen
 import com.fixit.app.ui.customer.profile.CustomerHelpScreen
-
+import com.fixit.app.ui.provider.profile.ProviderHelpScreen
+import com.fixit.app.ui.provider.profile.VerificationScreen
 private const val DEV_TAG = "DevAuth"
 private const val PROFILE_REFRESH_KEY = "profile_refresh"
 
@@ -332,8 +333,9 @@ fun FixItNavGraph(startDestination: String) {
                 onServicesAndRates = { nav.navigate(Routes.PROVIDER_SERVICES) },
                 onPaymentAndPayouts = { nav.navigate(Routes.PROVIDER_PAYMENT_PAYOUTS) },
                 onReviews          = { nav.navigate(Routes.PROVIDER_REVIEWS) },
-                onDisputeHistory   = { nav.navigate(Routes.PROVIDER_DISPUTE_HISTORY) },  // ← NEW
-                onHelp             = { /* TODO: help & support */ },
+                onDisputeHistory   = { nav.navigate(Routes.PROVIDER_DISPUTE_HISTORY) },
+                onVerification     = { nav.navigate(Routes.PROVIDER_VERIFICATION) },
+                onHelp             = { nav.navigate(Routes.PROVIDER_HELP)  },
                 viewModel          = vm,
             )
         }
@@ -386,7 +388,11 @@ fun FixItNavGraph(startDestination: String) {
                 onTabClick      = { nav.switchProviderTab(it) },
             )
         }
-
+        composable(Routes.PROVIDER_VERIFICATION) {
+            VerificationScreen(
+                onBack = { nav.popBackStack() },
+            )
+        }
         composable(
             Routes.PROVIDER_DISPUTE_DETAIL,
             arguments = listOf(navArgument("disputeId") {
@@ -434,6 +440,12 @@ fun FixItNavGraph(startDestination: String) {
             AddEditServiceScreen(
                 onBack  = { nav.popBackStack() },
                 onSaved = { nav.popBackStack(Routes.PROVIDER_SERVICES, inclusive = false) },
+            )
+        }
+
+        composable(Routes.PROVIDER_HELP) {
+            ProviderHelpScreen(
+                onBack = { nav.popBackStack() },
             )
         }
 

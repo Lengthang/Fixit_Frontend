@@ -32,7 +32,7 @@ import java.util.Locale
 import javax.inject.Inject
 import kotlin.coroutines.resume
 
-enum class UploadTarget { PHOTO, CERTIFICATE, NATIONAL_ID }
+enum class UploadTarget { PHOTO }
 
 private val DAY_WIRE = listOf(
     "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
@@ -50,10 +50,6 @@ data class EditProfileState(
     val yearsExperience: String = "0",
     val profilePhotoUrl: String? = null,
 
-    val certificationName: String = "",
-    val certificationUrl: String? = null,
-    val nationalIdUrl: String? = null,
-
     val availableCategories: List<CategoryResponse> = emptyList(),
     val selectedCategoryIds: Set<String> = emptySet(),
     val categoryPickerOpen: Boolean = false,
@@ -69,8 +65,6 @@ data class EditProfileState(
     val closeTime: String = "17:00",
 
     val uploadingPhoto: Boolean = false,
-    val uploadingCert: Boolean = false,
-    val uploadingNationalId: Boolean = false,
 
     /**
      * True after the first successful load. Used by the screen-side lifecycle
@@ -110,7 +104,7 @@ class EditProfileViewModel @Inject constructor(
         val clean = v.filter { it.isDigit() }.take(2)
         _state.value = _state.value.copy(yearsExperience = clean.ifBlank { "0" })
     }
-    fun onCertNameChange(v: String)          { _state.value = _state.value.copy(certificationName = v.take(120)) }
+
     fun onRadiusChange(km: Int)              { _state.value = _state.value.copy(serviceRadiusKm = km.coerceIn(1, 50)) }
 
     fun onPick(latitude: Double, longitude: Double) {
@@ -136,10 +130,7 @@ class EditProfileViewModel @Inject constructor(
     fun dismissError()                       { _state.value = _state.value.copy(errorMessage = null) }
 
     fun removePhoto()                        { _state.value = _state.value.copy(profilePhotoUrl = null) }
-    fun removeCertificate() {
-        _state.value = _state.value.copy(certificationUrl = null, certificationName = "")
-    }
-    fun removeNationalId()                   { _state.value = _state.value.copy(nationalIdUrl = null) }
+
 
     fun removeCategory(id: String) {
         _state.value = _state.value.copy(
@@ -162,9 +153,7 @@ class EditProfileViewModel @Inject constructor(
 
     fun onImagePicked(uri: Uri) {
         when (pendingUploadTarget) {
-            UploadTarget.PHOTO        -> uploadPhoto(uri)
-            UploadTarget.CERTIFICATE  -> uploadCert(uri)
-            UploadTarget.NATIONAL_ID  -> uploadNationalId(uri)
+            UploadTarget.PHOTO -> uploadPhoto(uri)
         }
     }
 
@@ -184,37 +173,9 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
-    private fun uploadCert(uri: Uri) {
-        viewModelScope.launch {
-            _state.value = _state.value.copy(uploadingCert = true)
-            runCatching { uploadRepo.uploadImage(uri) }
-                .onSuccess { url ->
-                    _state.value = _state.value.copy(certificationUrl = url, uploadingCert = false)
-                }
-                .onFailure { e ->
-                    _state.value = _state.value.copy(
-                        uploadingCert = false,
-                        errorMessage  = e.message ?: "Couldn't upload certificate",
-                    )
-                }
-        }
-    }
 
-    private fun uploadNationalId(uri: Uri) {
-        viewModelScope.launch {
-            _state.value = _state.value.copy(uploadingNationalId = true)
-            runCatching { uploadRepo.uploadImage(uri) }
-                .onSuccess { url ->
-                    _state.value = _state.value.copy(nationalIdUrl = url, uploadingNationalId = false)
-                }
-                .onFailure { e ->
-                    _state.value = _state.value.copy(
-                        uploadingNationalId = false,
-                        errorMessage        = e.message ?: "Couldn't upload national ID",
-                    )
-                }
-        }
-    }
+
+
 
     @SuppressLint("MissingPermission")
     fun resolveLocation() {
@@ -327,9 +288,6 @@ class EditProfileViewModel @Inject constructor(
             bio                = provider?.bio.orEmpty(),
             yearsExperience    = (provider?.yearsExperience ?: 0).toString(),
             profilePhotoUrl    = me?.profilePhotoUrl ?: provider?.profilePhotoUrl,
-            certificationName  = provider?.certification.orEmpty(),
-            certificationUrl   = provider?.certificationUrl,
-            nationalIdUrl      = provider?.nationalIdUrl,
             availableCategories = categories,
             selectedCategoryIds = provider?.categories?.map { it.id }?.toSet().orEmpty(),
             latitude           = provider?.latitude,
@@ -389,9 +347,6 @@ class EditProfileViewModel @Inject constructor(
                                 bio              = s.bio.takeIf { it.isNotBlank() },
                                 profilePhotoUrl  = s.profilePhotoUrl,
                                 yearsExperience  = s.yearsExperience.toIntOrNull() ?: 0,
-                                certification    = s.certificationName.takeIf { it.isNotBlank() },
-                                certificationUrl = s.certificationUrl,
-                                nationalIdUrl    = s.nationalIdUrl,
                                 location         = s.locationLabel.takeIf { it.isNotBlank() },
                                 latitude         = s.latitude,
                                 longitude        = s.longitude,
