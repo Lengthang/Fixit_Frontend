@@ -162,6 +162,7 @@ private fun CategoriesSection(
             categories.forEach { cat ->
                 CategoryCircle(
                     name = cat.name,
+                    iconUrl = cat.iconUrl,
                     onClick = { onCategoryClick(cat) },
                 )
             }
