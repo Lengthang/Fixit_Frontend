@@ -16,7 +16,8 @@ class AuthRepository @Inject constructor(
 
     suspend fun verifyOtp(phone: String, code: String, name: String? = null): TokenResponse {
         val res = api.verifyOtp(VerifyOtpRequest(phone, code, name))
-        val role = res.providerProfile?.let { UserRole.PROVIDER } ?: UserRole.CUSTOMER
+        // Trust the server's role field, not the presence of a provider_profile.
+        val role = UserRole.from(res.role)
         tokenStorage.save(res.accessToken, role)
         return res
     }

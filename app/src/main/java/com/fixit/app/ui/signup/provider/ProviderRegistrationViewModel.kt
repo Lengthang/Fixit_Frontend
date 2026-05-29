@@ -83,7 +83,9 @@ class ProviderRegistrationViewModel @Inject constructor(
                     _effects.emit(RegistrationEffect.Registered)
                 }
                 .onFailure {
-                    _state.value = _state.value.copy(error = it.message ?: "Registration failed")
+                    _state.value = _state.value.copy(
+                        error = it.message ?: "Registration failed",
+                    )
                 }
             _state.value = _state.value.copy(submitting = false)
         }

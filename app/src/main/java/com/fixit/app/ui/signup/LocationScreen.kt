@@ -16,12 +16,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.OutlineButton
 import com.fixit.app.ui.components.PrimaryButton
@@ -36,14 +43,29 @@ fun LocationScreen(
     onContinue: () -> Unit,
     step: Int = 5,
     total: Int = 11,
+    vm: LocationViewModel = hiltViewModel(),
 ) {
-    // Request the OS permission. Whatever the user picks (allow/deny),
-    // we advance — the screens that need a real lat/lng (ServiceAreaScreen
-    // on the provider branch) read it from FusedLocationProviderClient later
-    // and gracefully fall back if permission was denied.
+    val state by vm.state.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
+
+    // Advance only once the ViewModel has finished its save attempt (or skip).
+    LaunchedEffect(Unit) {
+        vm.effects.collect { effect ->
+            when (effect) { is SignupLocationEffect.Done -> onContinue() }
+        }
+    }
+    LaunchedEffect(state.error) {
+        state.error?.let { snackbar.showSnackbar(it); vm.dismissError() }
+    }
+
+    // Request the OS permission. On grant we resolve + persist the location;
+    // on denial we still advance (skip) so the user is never trapped — they can
+    // add an address later from Saved Addresses.
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { onContinue() },
+        onResult = { granted ->
+            if (granted) vm.resolveAndSave() else vm.skip()
+        },
     )
 
     FixItScreen {
@@ -85,9 +107,21 @@ fun LocationScreen(
         )
 
         Spacer(Modifier.weight(1f))
-        PrimaryButton("Allow location") {
+        SnackbarHost(snackbar, modifier = Modifier.padding(horizontal = 16.dp))
+
+        val busy = state.locating || state.saving
+        PrimaryButton(
+            text = when {
+                state.locating -> "Locating…"
+                state.saving -> "Saving…"
+                else -> "Allow location"
+            },
+            enabled = !busy,
+        ) {
             launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
-        OutlineButton("Not now", onContinue)
+        OutlineButton("Not now") {
+            if (!busy) vm.skip()
+        }
     }
 }

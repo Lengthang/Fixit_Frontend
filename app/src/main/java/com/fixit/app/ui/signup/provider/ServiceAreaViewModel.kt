@@ -22,6 +22,12 @@ data class ServiceAreaState(
     val longitude: Double? = null,
     val radiusKm: Int = 15,
     val locating: Boolean = false,
+    /**
+     * True once the user has explicitly chosen a point (dragged/tapped the pin)
+     * OR a GPS fix has successfully populated the coordinates. Used to stop a
+     * late/empty resolveLocation() callback from wiping a valid selection.
+     */
+    val hasUserSelection: Boolean = false,
 )
 
 @HiltViewModel
@@ -35,9 +41,14 @@ class ServiceAreaViewModel @Inject constructor(
     fun onRadiusChange(km: Int) {
         _state.value = _state.value.copy(radiusKm = km.coerceIn(1, 50))
     }
-    /** User dropped / dragged the pin or tapped the map. */
+
+    /** User dropped / dragged the pin or tapped the map. This is authoritative. */
     fun onPick(latitude: Double, longitude: Double) {
-        _state.value = _state.value.copy(latitude = latitude, longitude = longitude)
+        _state.value = _state.value.copy(
+            latitude = latitude,
+            longitude = longitude,
+            hasUserSelection = true,
+        )
     }
 
     /**
@@ -45,10 +56,19 @@ class ServiceAreaViewModel @Inject constructor(
      * Permission was requested on the previous (LocationScreen) step; if the
      * user declined, we keep lat/lng null and the screen Continue button
      * stays disabled.
+     *
+     * Important: a resolved fix is ONLY applied when it is non-null AND the user
+     * has not already chosen a point. This prevents a slow or failed GPS
+     * callback from overwriting (and nulling out) a pin the provider already
+     * dragged into place — the bug that was silently discarding the chosen
+     * service-area coordinates before they could be saved.
      */
     @SuppressLint("MissingPermission")
     fun resolveLocation() {
         if (_state.value.locating) return
+        // Don't re-resolve over an explicit user selection.
+        if (_state.value.hasUserSelection) return
+
         _state.value = _state.value.copy(locating = true)
         viewModelScope.launch {
             val client = LocationServices.getFusedLocationProviderClient(context)
@@ -84,11 +104,19 @@ class ServiceAreaViewModel @Inject constructor(
                 }
             }
 
-            _state.value = _state.value.copy(
-                latitude = resolved?.latitude,
-                longitude = resolved?.longitude,
-                locating = false,
-            )
+            // Guard: if the user dragged the pin while we were resolving, OR the
+            // fix came back null, leave the existing selection untouched.
+            val current = _state.value
+            if (current.hasUserSelection || resolved == null) {
+                _state.value = current.copy(locating = false)
+            } else {
+                _state.value = current.copy(
+                    latitude = resolved.latitude,
+                    longitude = resolved.longitude,
+                    locating = false,
+                    hasUserSelection = true,
+                )
+            }
         }
     }
 }
