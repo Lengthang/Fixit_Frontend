@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.secrets.gradle.plugin)
 }
 
 android {
@@ -50,6 +51,9 @@ android {
 }
 
 dependencies {
+    implementation(libs.play.services.location)
+    implementation(libs.play.services.maps)
+    implementation(libs.maps.compose)
     implementation(libs.play.services.location)
     // Hilt
     implementation(libs.hilt.android)
@@ -100,4 +104,13 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+secrets {
+    // Reads MAPS_API_KEY from local.properties (git-ignored) into the
+    // manifest placeholder ${MAPS_API_KEY}. Falls back to the value in
+    // local.defaults.properties when local.properties is absent (CI / fresh
+    // clones) so the project always builds — the map just won't render
+    // without a real key.
+    propertiesFileName = "local.properties"
+    defaultPropertiesFileName = "local.defaults.properties"
 }

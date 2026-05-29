@@ -35,6 +35,8 @@ import com.fixit.app.ui.components.TopBar
 import com.fixit.app.ui.signup.SignupDraftViewModel
 import com.fixit.app.ui.theme.C
 import androidx.compose.ui.layout.onGloballyPositioned
+import com.fixit.app.ui.components.LocationPickerMap
+import com.google.android.gms.maps.model.LatLng
 
 @Composable
 fun ServiceAreaScreen(
@@ -54,32 +56,45 @@ fun ServiceAreaScreen(
             "Select your service area",
             "Drag the pin or adjust the radius to set where you want to take jobs.",
         )
-        Box(
-            Modifier.padding(horizontal = 24.dp).fillMaxWidth().height(320.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .border(1.dp, C.Line, RoundedCornerShape(16.dp)),
-        ) {
-            MapBackground()
-            Box(
-                Modifier.align(Alignment.Center).size(220.dp).clip(CircleShape)
-                    .background(C.Blue.copy(alpha = 0.12f))
-                    .border(2.dp, C.Blue, CircleShape),
-            )
-            Icon(
-                Icons.Filled.LocationOn, null, tint = C.Orange,
-                modifier = Modifier.align(Alignment.Center).size(48.dp),
-            )
-            Box(
-                Modifier.align(Alignment.TopStart).padding(12.dp)
-                    .clip(RoundedCornerShape(20.dp)).background(Color.White)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    "Radius · ${state.radiusKm} km",
-                    fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.Ink,
-                )
-            }
-        }
+        LocationPickerMap(
+            selected = state.latitude?.let { lat ->
+                state.longitude?.let { lng -> LatLng(lat, lng) }
+            },
+            onPick = { latLng -> vm.onPick(latLng.latitude, latLng.longitude) },
+            radiusKm = state.radiusKm,
+            locating = state.locating,
+            onRecenterRequest = vm::resolveLocation,
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .fillMaxWidth()
+                .height(320.dp),
+        )
+//        Box(
+//            Modifier.padding(horizontal = 24.dp).fillMaxWidth().height(320.dp)
+//                .clip(RoundedCornerShape(16.dp))
+//                .border(1.dp, C.Line, RoundedCornerShape(16.dp)),
+//        ) {
+//            MapBackground()
+//            Box(
+//                Modifier.align(Alignment.Center).size(220.dp).clip(CircleShape)
+//                    .background(C.Blue.copy(alpha = 0.12f))
+//                    .border(2.dp, C.Blue, CircleShape),
+//            )
+//            Icon(
+//                Icons.Filled.LocationOn, null, tint = C.Orange,
+//                modifier = Modifier.align(Alignment.Center).size(48.dp),
+//            )
+//            Box(
+//                Modifier.align(Alignment.TopStart).padding(12.dp)
+//                    .clip(RoundedCornerShape(20.dp)).background(Color.White)
+//                    .padding(horizontal = 12.dp, vertical = 8.dp),
+//            ) {
+//                Text(
+//                    "Radius · ${state.radiusKm} km",
+//                    fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.Ink,
+//                )
+//            }
+//        }
 
         // Functional radius slider
         Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 18.dp)) {

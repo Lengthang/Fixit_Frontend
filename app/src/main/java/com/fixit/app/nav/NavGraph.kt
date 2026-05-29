@@ -62,6 +62,11 @@ import com.fixit.app.ui.customer.messages.CustomerMessagesScreen
 import com.fixit.app.ui.customer.profile.CustomerProfileScreen
 import com.fixit.app.ui.customer.profile.CustomerProfileViewModel
 import com.fixit.app.ui.customer.booking.CustomerBookingScreen
+import com.fixit.app.ui.customer.addresses.SavedAddressesScreen
+import com.fixit.app.ui.customer.addresses.SavedAddressesViewModel
+import com.fixit.app.ui.customer.addresses.EditAddressScreen
+import com.fixit.app.ui.customer.addresses.EditAddressViewModel
+
 private const val DEV_TAG = "DevAuth"
 private const val PROFILE_REFRESH_KEY = "profile_refresh"
 
@@ -525,7 +530,7 @@ fun FixItNavGraph(startDestination: String) {
             CustomerProfileScreen(
                 onTabClick       = { nav.switchCustomerTab(it) },
                 onPersonalInfo   = { /* TODO: customer edit-profile screen */ },
-                onSavedAddresses = { /* TODO: saved addresses screen */ },
+                onSavedAddresses = { nav.navigate(Routes.CUSTOMER_SAVED_ADDRESSES) },
                 onPaymentMethods = { /* TODO: payment methods screen */ },
                 onPromos         = { /* TODO: promos & rewards screen */ },
                 onTopUp          = { /* TODO: wallet top-up flow */ },
@@ -600,9 +605,37 @@ fun FixItNavGraph(startDestination: String) {
                 },
             )
         }
-//        composable(Routes.CUSTOMER_BOOKING_NEW) {
-//            CustomerBrowseScreen(title = "Booking", onBack = { nav.popBackStack() })
-//        }
+
+        composable(Routes.CUSTOMER_SAVED_ADDRESSES) {
+            val vm: SavedAddressesViewModel = hiltViewModel()
+            SavedAddressesScreen(
+                onBack = { nav.popBackStack() },
+                onAdd = { nav.navigate(Routes.CUSTOMER_ADDRESS_NEW) },
+                onEdit = { id -> nav.navigate(Routes.customerAddressEdit(id)) },
+                viewModel = vm,
+            )
+        }
+
+        composable(Routes.CUSTOMER_ADDRESS_NEW) {
+            val vm: EditAddressViewModel = hiltViewModel()
+            EditAddressScreen(
+                onBack = { nav.popBackStack() },
+                onSaved = { nav.popBackStack() },
+                viewModel = vm,
+            )
+        }
+
+        composable(
+            route = Routes.CUSTOMER_ADDRESS_EDIT,
+            arguments = listOf(navArgument("locationId") { type = NavType.StringType }),
+        ) {
+            val vm: EditAddressViewModel = hiltViewModel()
+            EditAddressScreen(
+                onBack = { nav.popBackStack() },
+                onSaved = { nav.popBackStack() },
+                viewModel = vm,
+            )
+        }
 
         composable(
             Routes.PLACEHOLDER,

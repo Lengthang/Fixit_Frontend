@@ -74,11 +74,11 @@ import com.fixit.app.ui.components.Avatar
 import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.IconBox
 import com.fixit.app.ui.components.TopBar
-import com.fixit.app.ui.signup.provider.MapBackground
 import com.fixit.app.ui.signup.provider.RadiusSlider
 import com.fixit.app.ui.theme.C
 import com.fixit.app.ui.util.OnLifecycleStart
-
+import com.fixit.app.ui.components.LocationPickerMap
+import com.google.android.gms.maps.model.LatLng
 /* ─────────────────────────────────────────────────────────────────────────
  * Public screen — wired by NavGraph at Routes.PROVIDER_EDIT_PROFILE.
  *
@@ -269,12 +269,57 @@ fun EditProfileScreen(
                     // canvas, visually anchoring the service area to the
                     // selected location (which the VM holds as lat/lng).
                     EpSection(title = "Work location") {
-                        LocationBlock(
-                            radiusKm      = state.serviceRadiusKm,
-                            locationLabel = state.locationLabel.ifBlank { "Set your service area" },
-                            locating      = state.locating,
-                            onChange      = viewModel::resolveLocation,
-                        )
+                        EpSection(title = "Work location") {
+                            LocationPickerMap(
+                                selected = state.latitude?.let { lat ->
+                                    state.longitude?.let { lng -> LatLng(lat, lng) }
+                                },
+                                onPick = { latLng -> viewModel.onPick(latLng.latitude, latLng.longitude) },
+                                radiusKm = state.serviceRadiusKm,
+                                locating = state.locating,
+                                onRecenterRequest = viewModel::resolveLocation,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(320.dp),
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                state.locationLabel.ifBlank { "Drop a pin to set your service area" },
+                                fontSize = 13.sp,
+                                color = if (state.locationLabel.isBlank()) C.Mute else C.Ink,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(bottom = 4.dp),
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Bottom,
+                            ) {
+                                Text("Service radius", fontSize = 12.sp, color = C.Slate, fontWeight = FontWeight.Medium)
+                                Text("${state.serviceRadiusKm} km", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = C.Blue)
+                            }
+                            RadiusSlider(
+                                value = state.serviceRadiusKm,
+                                onValueChange = viewModel::onRadiusChange,
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text("1 km", fontSize = 11.sp, color = C.Mute)
+                                Text("50 km", fontSize = 11.sp, color = C.Mute)
+                            }
+                            if (state.latitude == null && !state.locating) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    "Tap \u201cLocate me\u201d or drop a pin to set your location.",
+                                    fontSize = 12.sp,
+                                    color = C.Orange,
+                                    modifier = Modifier.clickable { viewModel.resolveLocation() },
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(18.dp))
                         Row(
                             modifier              = Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -296,26 +341,26 @@ fun EditProfileScreen(
                         }
                         // Imported from ServiceAreaScreen — identical drag
                         // behaviour, identical visuals.
-                        RadiusSlider(
-                            value         = state.serviceRadiusKm,
-                            onValueChange = viewModel::onRadiusChange,
-                        )
-                        Row(
-                            modifier              = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text("1 km",  fontSize = 11.sp, color = C.Mute)
-                            Text("50 km", fontSize = 11.sp, color = C.Mute)
-                        }
-                        if (state.latitude == null && !state.locating) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                "Couldn't read your location. Tap to retry.",
-                                fontSize = 12.sp,
-                                color    = C.Orange,
-                                modifier = Modifier.clickable { viewModel.resolveLocation() },
-                            )
-                        }
+//                        RadiusSlider(
+//                            value         = state.serviceRadiusKm,
+//                            onValueChange = viewModel::onRadiusChange,
+//                        )
+//                        Row(
+//                            modifier              = Modifier.fillMaxWidth().padding(top = 4.dp),
+//                            horizontalArrangement = Arrangement.SpaceBetween,
+//                        ) {
+//                            Text("1 km",  fontSize = 11.sp, color = C.Mute)
+//                            Text("50 km", fontSize = 11.sp, color = C.Mute)
+//                        }
+//                        if (state.latitude == null && !state.locating) {
+//                            Spacer(modifier = Modifier.height(12.dp))
+//                            Text(
+//                                "Couldn't read your location. Tap to retry.",
+//                                fontSize = 12.sp,
+//                                color    = C.Orange,
+//                                modifier = Modifier.clickable { viewModel.resolveLocation() },
+//                            )
+//                        }
                     }
 
                     // ── AVAILABILITY ─────────────────────────────────────
@@ -990,115 +1035,115 @@ private fun EpFileRow(
 // is the bottom-left address pill and the top-right "Change" pill, which
 // give the user a way to see and refresh their location without leaving
 // the edit screen.
-@Composable
-private fun LocationBlock(
-    radiusKm     : Int,
-    locationLabel: String,
-    locating     : Boolean,
-    onChange     : () -> Unit,
-) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(320.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, C.Line, RoundedCornerShape(16.dp)),
-    ) {
-        // Shared MapBackground from ServiceAreaScreen.kt.
-        MapBackground()
-
-        // Service-area circle — visually anchored to the centre of the map.
-        Box(
-            Modifier
-                .align(Alignment.Center)
-                .size(220.dp)
-                .clip(CircleShape)
-                .background(C.Blue.copy(alpha = 0.12f))
-                .border(2.dp, C.Blue, CircleShape),
-        )
-
-        // Same icon style ServiceAreaScreen uses — orange location pin.
-        Icon(
-            imageVector        = Icons.Filled.LocationOn,
-            contentDescription = null,
-            tint               = C.Orange,
-            modifier           = Modifier.align(Alignment.Center).size(48.dp),
-        )
-
-        // Top-left radius badge (matches ServiceAreaScreen).
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .padding(12.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.White)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-        ) {
-            Text(
-                "Radius · $radiusKm km",
-                fontSize   = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color      = C.Ink,
-            )
-        }
-
-        // Top-right "Change" pill — kicks off the same resolveLocation()
-        // flow ServiceAreaScreen uses. Tapping refreshes lat/lng and
-        // re-geocodes the address. Disabled while a fix is in flight.
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(12.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.White)
-                .clickable(enabled = !locating) { onChange() }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            if (locating) {
-                CircularProgressIndicator(
-                    color       = C.Blue,
-                    strokeWidth = 2.dp,
-                    modifier    = Modifier.size(12.dp),
-                )
-            }
-            Text(
-                if (locating) "Locating…" else "Change",
-                fontSize   = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color      = C.Blue,
-            )
-        }
-
-        // Bottom-left address pill — reflects locationLabel from state.
-        // Updates instantly when coords change, then upgrades to the
-        // geocoded address when reverse-geocoding lands.
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(12.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.White)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(
-                imageVector        = Icons.Filled.LocationOn,
-                contentDescription = null,
-                tint               = C.Blue,
-                modifier           = Modifier.size(12.dp),
-            )
-            Text(
-                locationLabel,
-                fontSize   = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color      = C.Ink,
-            )
-        }
-    }
-}
+//@Composable
+//private fun LocationBlock(
+//    radiusKm     : Int,
+//    locationLabel: String,
+//    locating     : Boolean,
+//    onChange     : () -> Unit,
+//) {
+//    Box(
+//        Modifier
+//            .fillMaxWidth()
+//            .height(320.dp)
+//            .clip(RoundedCornerShape(16.dp))
+//            .border(1.dp, C.Line, RoundedCornerShape(16.dp)),
+//    ) {
+//        // Shared MapBackground from ServiceAreaScreen.kt.
+//        MapBackground()
+//
+//        // Service-area circle — visually anchored to the centre of the map.
+//        Box(
+//            Modifier
+//                .align(Alignment.Center)
+//                .size(220.dp)
+//                .clip(CircleShape)
+//                .background(C.Blue.copy(alpha = 0.12f))
+//                .border(2.dp, C.Blue, CircleShape),
+//        )
+//
+//        // Same icon style ServiceAreaScreen uses — orange location pin.
+//        Icon(
+//            imageVector        = Icons.Filled.LocationOn,
+//            contentDescription = null,
+//            tint               = C.Orange,
+//            modifier           = Modifier.align(Alignment.Center).size(48.dp),
+//        )
+//
+//        // Top-left radius badge (matches ServiceAreaScreen).
+//        Box(
+//            Modifier
+//                .align(Alignment.TopStart)
+//                .padding(12.dp)
+//                .clip(RoundedCornerShape(20.dp))
+//                .background(Color.White)
+//                .padding(horizontal = 12.dp, vertical = 8.dp),
+//        ) {
+//            Text(
+//                "Radius · $radiusKm km",
+//                fontSize   = 12.sp,
+//                fontWeight = FontWeight.SemiBold,
+//                color      = C.Ink,
+//            )
+//        }
+//
+//        // Top-right "Change" pill — kicks off the same resolveLocation()
+//        // flow ServiceAreaScreen uses. Tapping refreshes lat/lng and
+//        // re-geocodes the address. Disabled while a fix is in flight.
+//        Row(
+//            modifier = Modifier
+//                .align(Alignment.TopEnd)
+//                .padding(12.dp)
+//                .clip(RoundedCornerShape(20.dp))
+//                .background(Color.White)
+//                .clickable(enabled = !locating) { onChange() }
+//                .padding(horizontal = 12.dp, vertical = 6.dp),
+//            verticalAlignment     = Alignment.CenterVertically,
+//            horizontalArrangement = Arrangement.spacedBy(6.dp),
+//        ) {
+//            if (locating) {
+//                CircularProgressIndicator(
+//                    color       = C.Blue,
+//                    strokeWidth = 2.dp,
+//                    modifier    = Modifier.size(12.dp),
+//                )
+//            }
+//            Text(
+//                if (locating) "Locating…" else "Change",
+//                fontSize   = 12.sp,
+//                fontWeight = FontWeight.SemiBold,
+//                color      = C.Blue,
+//            )
+//        }
+//
+//        // Bottom-left address pill — reflects locationLabel from state.
+//        // Updates instantly when coords change, then upgrades to the
+//        // geocoded address when reverse-geocoding lands.
+//        Row(
+//            modifier = Modifier
+//                .align(Alignment.BottomStart)
+//                .padding(12.dp)
+//                .clip(RoundedCornerShape(20.dp))
+//                .background(Color.White)
+//                .padding(horizontal = 12.dp, vertical = 6.dp),
+//            verticalAlignment     = Alignment.CenterVertically,
+//            horizontalArrangement = Arrangement.spacedBy(6.dp),
+//        ) {
+//            Icon(
+//                imageVector        = Icons.Filled.LocationOn,
+//                contentDescription = null,
+//                tint               = C.Blue,
+//                modifier           = Modifier.size(12.dp),
+//            )
+//            Text(
+//                locationLabel,
+//                fontSize   = 11.5.sp,
+//                fontWeight = FontWeight.SemiBold,
+//                color      = C.Ink,
+//            )
+//        }
+//    }
+//}
 
 // ── Day pill (Monday-first; controlled by VM toggle) ─────────────────────
 @Composable

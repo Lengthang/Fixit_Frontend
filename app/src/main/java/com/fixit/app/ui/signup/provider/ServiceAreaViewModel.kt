@@ -35,6 +35,10 @@ class ServiceAreaViewModel @Inject constructor(
     fun onRadiusChange(km: Int) {
         _state.value = _state.value.copy(radiusKm = km.coerceIn(1, 50))
     }
+    /** User dropped / dragged the pin or tapped the map. */
+    fun onPick(latitude: Double, longitude: Double) {
+        _state.value = _state.value.copy(latitude = latitude, longitude = longitude)
+    }
 
     /**
      * Tries to fill in lat/lng from the device's last known location.

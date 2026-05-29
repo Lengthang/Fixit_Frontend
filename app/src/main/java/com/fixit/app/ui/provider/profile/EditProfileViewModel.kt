@@ -112,6 +112,20 @@ class EditProfileViewModel @Inject constructor(
     }
     fun onCertNameChange(v: String)          { _state.value = _state.value.copy(certificationName = v.take(120)) }
     fun onRadiusChange(km: Int)              { _state.value = _state.value.copy(serviceRadiusKm = km.coerceIn(1, 50)) }
+
+    fun onPick(latitude: Double, longitude: Double) {
+        _state.value = _state.value.copy(
+            latitude = latitude,
+            longitude = longitude,
+            locationLabel = "%.5f, %.5f".format(latitude, longitude),
+        )
+        viewModelScope.launch {
+            val address = reverseGeocode(latitude, longitude)
+            if (!address.isNullOrBlank()) {
+                _state.value = _state.value.copy(locationLabel = address)
+            }
+        }
+    }
     fun toggleDay(index: Int) {
         if (index !in 0..6) return
         val updated = _state.value.activeDays.toMutableList().also { it[index] = !it[index] }

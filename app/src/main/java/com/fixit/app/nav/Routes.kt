@@ -66,6 +66,13 @@ object Routes {
     const val CUSTOMER_CATEGORIES  = "customer/categories"
     const val CUSTOMER_PROVIDERS   = "customer/providers"
     const val CUSTOMER_PROVIDERS_BY_CATEGORY = "customer/providers?categoryId={categoryId}&categoryName={categoryName}"
+
+    // ── Customer saved addresses ──
+    const val CUSTOMER_SAVED_ADDRESSES = "customer/addresses"
+    const val CUSTOMER_ADDRESS_NEW     = "customer/addresses/new"
+    const val CUSTOMER_ADDRESS_EDIT    = "customer/addresses/{locationId}/edit"
+    fun customerAddressEdit(locationId: String) = "customer/addresses/$locationId/edit"
+
     fun customerProvidersByCategory(categoryId: String, categoryName: String): String {
         val encId   = java.net.URLEncoder.encode(categoryId, "UTF-8")
         val encName = java.net.URLEncoder.encode(categoryName, "UTF-8")

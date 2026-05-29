@@ -14,7 +14,7 @@ object DevConfig {
     )
 
     fun freshPhone(): String =
-        "+1555" + (10_000_000..99_999_999).random().toString()
+        "+855" + (10_000_000..99_999_999).random().toString()
 }
 
 data class DevTestUser(val label: String, val phone: String, val role: UserRole)
