@@ -29,12 +29,13 @@ class ProviderRepository @Inject constructor(private val api: ProviderApi) {
 
     /** Mapped to domain — what the Customer Home Screen uses. */
     suspend fun listNearby(
+        categoryId: String? = null,
         customerLat: Double?,
         customerLng: Double?,
         limit: Int = 20,
     ): List<NearbyProvider> =
         api.list(
-            categoryId = null,
+            categoryId = categoryId,
             customerLat = customerLat,
             customerLng = customerLng,
             limit = limit,

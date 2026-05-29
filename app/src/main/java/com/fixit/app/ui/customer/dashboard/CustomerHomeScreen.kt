@@ -1,6 +1,8 @@
 package com.fixit.app.ui.customer.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,10 +13,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -24,13 +31,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.fixit.app.domain.model.HomeCategory
 import com.fixit.app.domain.model.NearbyProvider
 import com.fixit.app.ui.components.CategoryCircle
@@ -41,7 +54,9 @@ import com.fixit.app.ui.components.FixItScreen
 import com.fixit.app.ui.components.PromoBanner
 import com.fixit.app.ui.components.ProviderNearbyCard
 import com.fixit.app.ui.components.SearchBar
+import com.fixit.app.ui.components.iconForCategory
 import com.fixit.app.ui.theme.C
+import com.fixit.app.ui.util.normalizeMediaUrl
 import kotlinx.coroutines.launch
 
 @Composable
@@ -107,14 +122,17 @@ fun CustomerHomeScreen(
 
                 CategoriesSection(
                     categories = state.categories,
+                    selectedCategoryId = state.selectedCategoryId,
                     onSeeAll = onSeeAllCategories,
-                    onCategoryClick = onCategoryClick,
+                    onCategorySelected = { categoryId -> viewModel.onCategorySelected(categoryId) },
                 )
 
                 Spacer(Modifier.height(20.dp))
 
                 ProvidersSection(
                     providers = state.nearby,
+                    activeCategoryName = state.categories
+                        .firstOrNull { it.id == state.selectedCategoryId }?.name,
                     onSeeAll = onSeeAllProviders,
                     onProviderClick = onProviderClick,
                     onBookClick = onProviderBookClick,
@@ -126,7 +144,7 @@ fun CustomerHomeScreen(
             SnackbarHost(
                 snackbarHostState,
                 modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.BottomCenter)
+                    .align(Alignment.BottomCenter)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
@@ -137,11 +155,13 @@ fun CustomerHomeScreen(
 
 // ── Sections (file-private; tightly coupled to this screen's layout) ────
 
+
 @Composable
 private fun CategoriesSection(
     categories: List<HomeCategory>,
+    selectedCategoryId: String?,
     onSeeAll: () -> Unit,
-    onCategoryClick: (HomeCategory) -> Unit,
+    onCategorySelected: (String?) -> Unit,
 ) {
     SectionHeader(title = "Categories", actionText = "See all", onActionClick = onSeeAll)
     if (categories.isEmpty()) {
@@ -159,34 +179,127 @@ private fun CategoriesSection(
                 .padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // "All" clears any active filter. Selected when no category is active.
+            SelectableCategoryCircle(
+                name = "All",
+                iconUrl = null,
+                fallbackIcon = Icons.Filled.Apps,
+                selected = selectedCategoryId == null,
+                onClick = { onCategorySelected(null) },
+            )
             categories.forEach { cat ->
-                CategoryCircle(
+                SelectableCategoryCircle(
                     name = cat.name,
                     iconUrl = cat.iconUrl,
-                    onClick = { onCategoryClick(cat) },
+                    fallbackIcon = iconForCategory(cat.name),
+                    selected = cat.id == selectedCategoryId,
+                    // Tapping a category toggles the in-place filter.
+                    // Re-tapping the active one clears it (handled in VM).
+                    onClick = { onCategorySelected(cat.id) },
                 )
             }
         }
     }
 }
 
+/**
+ * Selectable variant of CategoryCircle used on Customer Home for in-place
+ * category filtering. Matches CategoryCircle's footprint (72.dp column,
+ * 58.dp disc) and the "All" highlight treatment: when [selected], the disc
+ * gets a soft-blue fill + blue ring and the icon/label turn blue. When a
+ * remote [iconUrl] is present it loads via Coil (same as CategoryCircle);
+ * otherwise it falls back to [fallbackIcon].
+ *
+ * Kept local so the shared CategoryCircle component stays selection-agnostic.
+ */
+@Composable
+private fun SelectableCategoryCircle(
+    name: String,
+    iconUrl: String?,
+    fallbackIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val resolvedIconUrl = normalizeMediaUrl(iconUrl)
+    Column(
+        Modifier
+            .width(72.dp)
+            .clip(CircleShape)
+            .clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            Modifier
+                .size(58.dp)
+                .clip(CircleShape)
+                .then(
+                    if (selected) {
+                        Modifier
+                            .background(C.BlueSoft)
+                            .border(2.dp, C.Blue, CircleShape)
+                    } else {
+                        Modifier.background(C.Subtle)
+                    }
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!resolvedIconUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = resolvedIconUrl,
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape),
+                )
+            } else {
+                Icon(
+                    imageVector = fallbackIcon,
+                    contentDescription = name,
+                    tint = if (selected) C.Blue else C.Ink,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+        Text(
+            name,
+            fontSize = 11.5.sp,
+            color = if (selected) C.Blue else C.Slate,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+
+
 @Composable
 private fun ProvidersSection(
     providers: List<NearbyProvider>,
+    activeCategoryName: String?,
     onSeeAll: () -> Unit,
     onProviderClick: (NearbyProvider) -> Unit,
     onBookClick: (NearbyProvider) -> Unit,
 ) {
     SectionHeader(
-        title = "Providers near you",
+        title = if (activeCategoryName != null) "Providers · $activeCategoryName" else "Providers near you",
         actionText = "See all".takeIf { providers.isNotEmpty() },
         onActionClick = onSeeAll,
     )
     if (providers.isEmpty()) {
         Box(Modifier.padding(horizontal = 20.dp)) {
             EmptyState(
-                title = "No providers nearby yet",
-                subtitle = "Check back soon — we're adding pros in your area.",
+                title = if (activeCategoryName != null)
+                    "No $activeCategoryName providers nearby"
+                else
+                    "No providers nearby yet",
+                subtitle = if (activeCategoryName != null)
+                    "Try a different category or tap “All” to see everyone."
+                else
+                    "Check back soon — we're adding pros in your area.",
             )
         }
     } else {
@@ -216,7 +329,7 @@ private fun SectionHeader(
         Modifier
             .fillMaxWidth()
             .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 10.dp),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = C.Ink)
         Spacer(Modifier.weight(1f))
@@ -226,17 +339,12 @@ private fun SectionHeader(
                 fontSize = 12.sp,
                 color = C.Blue,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.background(C.Bg).padding(4.dp),
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable { onActionClick() }
+                    .background(C.Bg)
+                    .padding(4.dp),
             )
-            // Wrap clickable separately to avoid the padding eating taps.
-            Box(Modifier.background(C.Bg)) {
-                Text(
-                    "",
-                    modifier = Modifier
-                        .background(C.Bg)
-                        .padding(4.dp),
-                )
-            }
         }
     }
 }

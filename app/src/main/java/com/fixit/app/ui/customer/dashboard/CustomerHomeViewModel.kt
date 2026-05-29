@@ -48,6 +48,10 @@ data class CustomerHomeState(
     val promos: List<ActivePromo> = emptyList(),
     val nearby: List<NearbyProvider> = emptyList(),
     val notificationsDot: Boolean = false,      // wired off until notifications backend lands
+    /** Active category filter id; null = "All" (no filter). */
+    val selectedCategoryId: String? = null,
+    /** True while a category re-filter request is in flight (keeps the list mounted). */
+    val isFilteringProviders: Boolean = false,
 )
 
 /**
@@ -88,6 +92,49 @@ class CustomerHomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Toggle a category filter. Tapping the active category (or the same id)
+     * clears the filter and shows all providers again. Tapping a new category
+     * filters the provider list to that category. The selected id drives the
+     * highlight in the UI.
+     */
+    fun onCategorySelected(categoryId: String?) {
+        val current = _state.value.selectedCategoryId
+        // Same category tapped again → clear. "All" (null) also clears.
+        val next = if (categoryId == null || categoryId == current) null else categoryId
+        if (next == current) {
+            // Re-tapping "All" while already unfiltered is a no-op.
+            if (next == null && current == null) return
+        }
+        _state.value = _state.value.copy(selectedCategoryId = next)
+        reloadProviders()
+    }
+
+    /** Re-fetch the provider list honoring the current selectedCategoryId. */
+    private fun reloadProviders() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isFilteringProviders = true, errorMessage = null)
+            val current = _state.value
+            val nearby = runCatching {
+                providerRepo.listNearby(
+                    categoryId = current.selectedCategoryId,
+                    customerLat = current.latitude,
+                    customerLng = current.longitude,
+                    limit = 20,
+                )
+            }.getOrElse { e ->
+                _state.value = _state.value.copy(
+                    errorMessage = e.message ?: "Couldn't filter providers",
+                )
+                current.nearby   // keep the previous list rather than blanking out
+            }
+            _state.value = _state.value.copy(
+                nearby = nearby,
+                isFilteringProviders = false,
+            )
+        }
+    }
+
     private suspend fun loadAll() = coroutineScope {
         // 1) Pull profile + categories + promos in parallel. Provider list
         //    depends on location so it runs after we resolve coords.
@@ -116,9 +163,11 @@ class CustomerHomeViewModel @Inject constructor(
             longitude       = location?.lng,
         )
 
-        // 2) Provider list with the location we now have (may be null).
+        // 2) Provider list with the location we now have (may be null),
+        //    honoring any active category filter (e.g. across a refresh).
         val nearby = runCatching {
             providerRepo.listNearby(
+                categoryId = _state.value.selectedCategoryId,
                 customerLat = location?.lat,
                 customerLng = location?.lng,
                 limit = 20,
